@@ -89,13 +89,13 @@ export async function fetchGalleryFromD1(
   const list = results ?? [];
   return list.map((r) => {
     const assetId = r.mint_or_contract;
-    const tokenRef = `solana:${assetId}`;
     return {
       id: assetId,
       name: r.name,
       symbol: r.symbol,
       uri: `${base}/v1/metadata/solana/${encodeURIComponent(assetId)}`,
-      image: `${base}/v1/asset/${encodeURIComponent(tokenRef)}/image.png`,
+      // Only set when R2 has `images/.../preview.png` via upload; otherwise <img> would 404 spam the console.
+      image: null,
       owner: null,
     };
   });
