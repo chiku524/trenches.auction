@@ -13,7 +13,7 @@ export function loadMintAuthorityKeypair(raw: string): Keypair {
   return Keypair.fromSecretKey(Uint8Array.from(arr));
 }
 
-function createWorkerUmi(rpcUrl: string, feePayer: Keypair) {
+export function createWorkerUmi(rpcUrl: string, feePayer: Keypair) {
   const umi = createUmi(rpcUrl).use(mplBubblegum());
   const kp = fromWeb3JsKeypair(feePayer);
   const signer = createSignerFromKeypair(umi, kp);

@@ -12,8 +12,12 @@ import {
   verifyWalletSignMessage,
 } from "./mint-auth";
 import { fetchCnftsByTree } from "./gallery-das";
+import { serverCreateTreeV2 } from "./cnft-tree";
+import { getPersistedCnftTree, resolveMerkleTreeAddress } from "./cnft-runtime";
+import { dnaForAssetId } from "./collection-traits";
 
 const CHALLENGE_MAX_AGE_MS = 5 * 60 * 1000;
+const DEFAULT_MINT_BATCH_MAX = 20;
 
 type Secrets = {
   ADMIN_SECRET?: string;
@@ -35,6 +39,9 @@ app.get("/", (c) =>
     gallery: "/v1/gallery/cnft",
     mint_challenge: "GET /v1/mint/cnft/challenge",
     mint_submit: "POST /v1/mint/cnft",
+    cnft_status: "GET /v1/cnft/status",
+    admin_cnft_tree: "POST /v1/admin/cnft/tree",
+    admin_cnft_mint_batch: "POST /v1/admin/cnft/mint-batch",
     ui: "/ (static gallery + mint after build:web)",
   })
 );
@@ -54,15 +61,39 @@ app.get("/v1/mint/cnft/challenge", (c) => {
   });
 });
 
+app.get("/v1/cnft/status", async (c) => {
+  const row = await getPersistedCnftTree(c.env.DB);
+  const envTree = c.env.CNFT_MERKLE_TREE?.trim() ?? "";
+  const tree = (await resolveMerkleTreeAddress(c.env.DB, envTree)) ?? null;
+  const rpc = Boolean(c.env.CNFT_RPC_URL);
+  const mintKeypair = Boolean(c.env.CNFT_MINT_KEYPAIR);
+  const maxDepth = row?.max_depth ?? null;
+  const approxCapacity = maxDepth !== null ? 2 ** maxDepth : null;
+  return c.json({
+    mintReady: Boolean(tree && rpc && mintKeypair),
+    merkleTree: tree,
+    maxDepth,
+    approxCapacity,
+    treePublic: row ? row.tree_public === 1 : null,
+    secrets: { rpcConfigured: rpc, mintKeypairConfigured: mintKeypair },
+    persistedTree: Boolean(row),
+    hint: !tree
+      ? "Create a tree via POST /v1/admin/cnft/tree (or set CNFT_MERKLE_TREE)."
+      : !rpc || !mintKeypair
+        ? "Set Cloudflare secrets CNFT_RPC_URL and CNFT_MINT_KEYPAIR."
+        : null,
+  });
+});
+
 app.post("/v1/mint/cnft", async (c) => {
   const keypair = c.env.CNFT_MINT_KEYPAIR;
   const rpc = c.env.CNFT_RPC_URL;
-  const tree = c.env.CNFT_MERKLE_TREE?.trim();
+  const tree = await resolveMerkleTreeAddress(c.env.DB, c.env.CNFT_MERKLE_TREE ?? "");
   if (!keypair || !rpc || !tree) {
     return c.json(
       {
         error:
-          "cNFT mint not configured: set secrets CNFT_MINT_KEYPAIR, CNFT_RPC_URL and var CNFT_MERKLE_TREE",
+          "cNFT mint not configured: set secrets CNFT_MINT_KEYPAIR and CNFT_RPC_URL, then create a Merkle tree (POST /v1/admin/cnft/tree) or set var CNFT_MERKLE_TREE",
       },
       503
     );
@@ -132,7 +163,7 @@ app.post("/v1/mint/cnft", async (c) => {
   await c.env.DB.prepare(`INSERT INTO mint_challenge_used (message_hash) VALUES (?)`).bind(hash).run();
 
   try {
-    await registerSolanaCnft(c.env.DB, minted.assetId, name, symbol);
+    await registerSolanaCnft(c.env.DB, minted.assetId, name, symbol, dnaForAssetId(minted.assetId));
   } catch (regErr) {
     return c.json(
       {
@@ -150,12 +181,12 @@ app.post("/v1/mint/cnft", async (c) => {
 
 app.get("/v1/gallery/cnft", async (c) => {
   const rpc = c.env.CNFT_RPC_URL;
-  const tree = c.env.CNFT_MERKLE_TREE?.trim();
+  const tree = await resolveMerkleTreeAddress(c.env.DB, c.env.CNFT_MERKLE_TREE ?? "");
   if (!rpc || !tree) {
     return c.json({
       items: [],
       configured: false,
-      hint: "Set CNFT_RPC_URL secret and CNFT_MERKLE_TREE var",
+      hint: "Set CNFT_RPC_URL secret and create a tree (admin) or CNFT_MERKLE_TREE var",
     });
   }
   const limRaw = c.req.query("limit");
@@ -331,6 +362,143 @@ function requireAdmin(c: { env: Env & Secrets; req: { header: (name: string) => 
   }
   return null;
 }
+
+app.post("/v1/admin/cnft/tree", async (c) => {
+  const denied = requireAdmin(c);
+  if (denied) return denied;
+
+  const keypair = c.env.CNFT_MINT_KEYPAIR;
+  const rpc = c.env.CNFT_RPC_URL;
+  if (!keypair || !rpc) {
+    return c.json({ error: "Set CNFT_MINT_KEYPAIR and CNFT_RPC_URL secrets first" }, 503);
+  }
+
+  const existing = await getPersistedCnftTree(c.env.DB);
+  if (existing) {
+    return c.json(
+      {
+        error: "cnft_tree already stored",
+        merkleTree: existing.merkle_tree,
+        hint: "Use the existing tree or remove the cnft_tree row in D1 only if you know the impact.",
+      },
+      409
+    );
+  }
+
+  let body: {
+    maxDepth?: number;
+    maxBufferSize?: number;
+    canopyDepth?: number;
+    treePublic?: boolean;
+    cluster?: string;
+  };
+  try {
+    body = (await c.req.json()) as typeof body;
+  } catch {
+    body = {};
+  }
+
+  const maxDepth = body.maxDepth ?? 14;
+  const maxBufferSize = body.maxBufferSize ?? 64;
+  const canopyDepth = body.canopyDepth ?? 8;
+  const treePublic = Boolean(body.treePublic);
+  const cluster =
+    typeof body.cluster === "string" && body.cluster.trim() ? body.cluster.trim() : "devnet";
+
+  if (canopyDepth > maxDepth) {
+    return c.json({ error: "canopyDepth must be <= maxDepth" }, 400);
+  }
+
+  let created;
+  try {
+    created = await serverCreateTreeV2({
+      rpcUrl: rpc,
+      mintAuthorityKeypairJson: keypair,
+      maxDepth,
+      maxBufferSize,
+      canopyDepth,
+      treePublic,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: "create_tree_failed", detail: msg.slice(0, 2000) }, 502);
+  }
+
+  await c.env.DB.prepare(
+    `INSERT INTO cnft_tree (id, merkle_tree, max_depth, max_buffer_size, canopy_depth, tree_public, cluster)
+     VALUES (1, ?, ?, ?, ?, ?, ?)`
+  )
+    .bind(created.merkleTree, maxDepth, maxBufferSize, canopyDepth, treePublic ? 1 : 0, cluster)
+    .run();
+
+  return c.json({ ok: true, tree: created }, 201);
+});
+
+app.post("/v1/admin/cnft/mint-batch", async (c) => {
+  const denied = requireAdmin(c);
+  if (denied) return denied;
+
+  const keypair = c.env.CNFT_MINT_KEYPAIR;
+  const rpc = c.env.CNFT_RPC_URL;
+  const tree = await resolveMerkleTreeAddress(c.env.DB, c.env.CNFT_MERKLE_TREE ?? "");
+  if (!keypair || !rpc || !tree) {
+    return c.json({ error: "Missing CNFT_MINT_KEYPAIR, CNFT_RPC_URL, or Merkle tree" }, 503);
+  }
+
+  let body: {
+    recipient?: string;
+    count?: number;
+    namePrefix?: string;
+    symbol?: string;
+    startNumber?: number;
+  };
+  try {
+    body = (await c.req.json()) as typeof body;
+  } catch {
+    return c.json({ error: "invalid JSON" }, 400);
+  }
+
+  const recipient = body.recipient?.trim();
+  if (!recipient) {
+    return c.json({ error: "recipient required" }, 400);
+  }
+
+  const capParsed = Number.parseInt(c.env.CNFT_MINT_BATCH_MAX ?? "", 10);
+  const batchMax = Math.min(100, Math.max(1, Number.isFinite(capParsed) ? capParsed : DEFAULT_MINT_BATCH_MAX));
+  const count = Math.min(batchMax, Math.max(1, Number(body.count) || 1));
+  const namePrefix = body.namePrefix?.trim() || "Trenches";
+  const symbol = body.symbol?.trim() || "TRNCH";
+  const startNumber = Math.max(1, Number(body.startNumber) || 1);
+
+  const royaltyBps = Number.parseInt(c.env.CNFT_ROYALTY_BPS ?? "500", 10);
+
+  const results: Record<string, unknown>[] = [];
+  for (let i = 0; i < count; i++) {
+    const num = startNumber + i;
+    const name = `${namePrefix} #${num}`;
+    try {
+      const minted = await serverMintCompressedNft({
+        rpcUrl: rpc,
+        mintAuthorityKeypairJson: keypair,
+        merkleTree: tree,
+        recipient,
+        publicBaseUrl: c.env.PUBLIC_BASE_URL,
+        royaltyBps: Number.isFinite(royaltyBps) ? royaltyBps : 500,
+        name,
+        symbol,
+      });
+      await registerSolanaCnft(c.env.DB, minted.assetId, name, symbol, dnaForAssetId(minted.assetId));
+      results.push({ ok: true, name, ...minted });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      results.push({ ok: false, name, error: msg.slice(0, 500) });
+      break;
+    }
+  }
+
+  const okCount = results.filter((r) => r.ok === true).length;
+  return c.json({ ok: true, attempted: results.length, minted: okCount, results }, 200);
+});
 
 app.post("/v1/admin/tokens", async (c) => {
   const denied = requireAdmin(c);
