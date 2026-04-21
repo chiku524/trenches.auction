@@ -24,6 +24,8 @@ type GalleryJson = {
 
 type CnftStatus = {
   mintReady: boolean;
+  /** Payer / tree authority for server mint — fund on devnet. */
+  mintAuthorityAddress?: string | null;
   merkleTree: string | null;
   maxDepth: number | null;
   approxCapacity: number | null;
@@ -73,6 +75,11 @@ function StatusPanel({ refreshKey }: { refreshKey: number }) {
           <li>
             Max leaves (2^depth): <strong>{s.approxCapacity.toLocaleString()}</strong>
             {s.maxDepth != null ? ` (depth ${s.maxDepth})` : ""}
+          </li>
+        ) : null}
+        {s.mintAuthorityAddress ? (
+          <li>
+            Fund server mint (devnet SOL): <code style={{ wordBreak: "break-all" }}>{s.mintAuthorityAddress}</code>
           </li>
         ) : null}
         {s.hint ? <li className="err">{s.hint}</li> : null}

@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { computeClockTraits } from "./time-traits";
 import { buildMetaplexStyleJson, type Dna, type DynamicState } from "./nft-metadata";
-import { serverMintCompressedNft } from "./cnft-server-mint";
+import { loadMintAuthorityKeypair, serverMintCompressedNft } from "./cnft-server-mint";
 import { registerSolanaCnft } from "./token-registry";
 import {
   MINT_CHALLENGE_PREFIX,
@@ -66,11 +66,22 @@ app.get("/v1/cnft/status", async (c) => {
   const envTree = c.env.CNFT_MERKLE_TREE?.trim() ?? "";
   const tree = (await resolveMerkleTreeAddress(c.env.DB, envTree)) ?? null;
   const rpc = Boolean(c.env.CNFT_RPC_URL);
-  const mintKeypair = Boolean(c.env.CNFT_MINT_KEYPAIR);
+  const mintKeypairSecret = c.env.CNFT_MINT_KEYPAIR;
+  const mintKeypair = Boolean(mintKeypairSecret);
+  let mintAuthorityAddress: string | null = null;
+  if (mintKeypairSecret) {
+    try {
+      mintAuthorityAddress = loadMintAuthorityKeypair(mintKeypairSecret).publicKey.toBase58();
+    } catch {
+      mintAuthorityAddress = null;
+    }
+  }
   const maxDepth = row?.max_depth ?? null;
   const approxCapacity = maxDepth !== null ? 2 ** maxDepth : null;
   return c.json({
     mintReady: Boolean(tree && rpc && mintKeypair),
+    /** Base58 pubkey of CNFT_MINT_KEYPAIR — fund this on devnet for tree + mint fees. */
+    mintAuthorityAddress,
     merkleTree: tree,
     maxDepth,
     approxCapacity,
