@@ -80,7 +80,7 @@ app.get("/v1/cnft/status", async (c) => {
     hint: !tree
       ? "Create a tree via POST /v1/admin/cnft/tree (or set CNFT_MERKLE_TREE)."
       : !rpc || !mintKeypair
-        ? "Set Cloudflare secrets CNFT_RPC_URL and CNFT_MINT_KEYPAIR."
+        ? "Set Cloudflare secrets CNFT_RPC_URL and CNFT_MINT_KEYPAIR. Prefer a provider RPC URL (not only api.*.solana.com)—public endpoints often return 403 from Workers."
         : null,
   });
 });
@@ -157,7 +157,7 @@ app.post("/v1/mint/cnft", async (c) => {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return c.json({ error: "mint_failed", detail: msg.slice(0, 2000) }, 502);
+    return c.json({ error: "mint_failed", detail: formatRpcErrorDetail(msg) }, 502);
   }
 
   await c.env.DB.prepare(`INSERT INTO mint_challenge_used (message_hash) VALUES (?)`).bind(hash).run();
@@ -345,6 +345,21 @@ function escapeHtml(s: string): string {
     .replace(/"/g, "&quot;");
 }
 
+/** Public Solana RPC and some free tiers block Cloudflare Workers egress IPs (HTTP 403). */
+function formatRpcErrorDetail(raw: string, maxLen = 2000): string {
+  const msg = raw.slice(0, maxLen);
+  const low = msg.toLowerCase();
+  const looksBlocked =
+    low.includes("403") ||
+    low.includes("forbidden") ||
+    low.includes("blocked") ||
+    low.includes("ip or provider");
+  if (!looksBlocked) return msg;
+  const hint =
+    " Workers run from datacenter IPs: use CNFT_RPC_URL from a provider that allows server access (Helius, QuickNode, Alchemy, Triton, etc.) with your API key, on the same cluster (devnet vs mainnet) as your tree.";
+  return msg.includes("Helius") || msg.includes("QuickNode") ? msg : msg + hint;
+}
+
 function requireAdmin(c: { env: Env & Secrets; req: { header: (name: string) => string | undefined } }): Response | null {
   const secret = c.env.ADMIN_SECRET;
   if (!secret) {
@@ -421,7 +436,7 @@ app.post("/v1/admin/cnft/tree", async (c) => {
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
-    return c.json({ error: "create_tree_failed", detail: msg.slice(0, 2000) }, 502);
+    return c.json({ error: "create_tree_failed", detail: formatRpcErrorDetail(msg) }, 502);
   }
 
   await c.env.DB.prepare(
@@ -491,7 +506,7 @@ app.post("/v1/admin/cnft/mint-batch", async (c) => {
       results.push({ ok: true, name, ...minted });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      results.push({ ok: false, name, error: msg.slice(0, 500) });
+      results.push({ ok: false, name, error: formatRpcErrorDetail(msg, 800) });
       break;
     }
   }
