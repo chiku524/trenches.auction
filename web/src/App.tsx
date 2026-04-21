@@ -18,8 +18,9 @@ type GalleryJson = {
     owner: string | null;
   }[];
   configured?: boolean;
+  dataSource?: "das" | "d1";
   error?: string | null;
-  hint?: string;
+  hint?: string | null;
 };
 
 type CnftStatus = {
@@ -500,6 +501,11 @@ function GalleryPanel({ refreshKey }: { refreshKey: number }) {
         <button type="button" className="primary" disabled={loading} onClick={() => void load()}>
           {loading ? "Loading…" : "Load / refresh"}
         </button>
+        {data?.dataSource ? (
+          <span className="msg" style={{ marginLeft: "0.5rem" }}>
+            Source: {data.dataSource === "d1" ? "app database" : "DAS index"}
+          </span>
+        ) : null}
         {data?.hint ? <span className="msg">{data.hint}</span> : null}
         {data?.error ? <span className="msg err">DAS: {data.error}</span> : null}
       </div>

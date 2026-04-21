@@ -11,7 +11,7 @@ import {
   sha256Hex,
   verifyWalletSignMessage,
 } from "./mint-auth";
-import { fetchCnftsByTree } from "./gallery-das";
+import { fetchCnftsByTree, fetchGalleryFromD1 } from "./gallery-das";
 import { serverCreateTreeV2 } from "./cnft-tree";
 import { getPersistedCnftTree, resolveMerkleTreeAddress } from "./cnft-runtime";
 import { dnaForAssetId } from "./collection-traits";
@@ -202,9 +202,31 @@ app.get("/v1/gallery/cnft", async (c) => {
   }
   const limRaw = c.req.query("limit");
   const lim = Math.min(1000, Math.max(1, Number.parseInt(limRaw ?? "200", 10) || 200));
-  const { items, error } = await fetchCnftsByTree(rpc, tree, lim);
+  const { items: dasItems, error: dasError } = await fetchCnftsByTree(rpc, tree, lim);
+  let items = dasItems;
+  let dataSource: "das" | "d1" = "das";
+  if (items.length === 0) {
+    const d1 = await fetchGalleryFromD1(c.env.DB, c.env.PUBLIC_BASE_URL, lim);
+    if (d1.length > 0) {
+      items = d1;
+      dataSource = "d1";
+    }
+  }
+  let hint: string | null = null;
+  if (dataSource === "d1" && items.length > 0) {
+    hint = dasError
+      ? `DAS could not list assets (${dasError}). Showing NFTs registered in this app (D1) instead. Set CNFT_RPC_URL to a DAS-enabled devnet URL (e.g. Helius) to use on-chain index queries.`
+      : "DAS returned no group assets; showing mints from this app’s database (D1). Use a DAS endpoint as CNFT_RPC_URL for DAS (getAssetsByGroup) results.";
+  }
   return c.json(
-    { items, configured: true, tree, error: error ?? null },
+    {
+      items,
+      configured: true,
+      tree,
+      dataSource,
+      error: dataSource === "d1" ? null : (dasError ?? null),
+      hint,
+    },
     200,
     { "Cache-Control": "public, max-age=30" }
   );

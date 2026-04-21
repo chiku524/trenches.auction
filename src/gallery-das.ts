@@ -69,3 +69,34 @@ export async function fetchCnftsByTree(
   const items = (json.result?.items ?? []).map(normalizeDasAsset).filter((i) => i.id.length > 0);
   return { items };
 }
+
+/** List Solana cNFTs registered in D1 (always populated when our mints succeed). Use when DAS is unavailable. */
+export async function fetchGalleryFromD1(
+  db: D1Database,
+  publicBaseUrl: string,
+  limit: number
+): Promise<GalleryItem[]> {
+  const base = publicBaseUrl.replace(/\/$/, "");
+  const cap = Math.min(1000, Math.max(1, limit));
+  const { results } = await db
+    .prepare(
+      `SELECT mint_or_contract, name, symbol FROM tokens
+       WHERE chain = 'solana' ORDER BY id DESC LIMIT ?`
+    )
+    .bind(cap)
+    .all<{ mint_or_contract: string; name: string | null; symbol: string | null }>();
+
+  const list = results ?? [];
+  return list.map((r) => {
+    const assetId = r.mint_or_contract;
+    const tokenRef = `solana:${assetId}`;
+    return {
+      id: assetId,
+      name: r.name,
+      symbol: r.symbol,
+      uri: `${base}/v1/metadata/solana/${encodeURIComponent(assetId)}`,
+      image: `${base}/v1/asset/${encodeURIComponent(tokenRef)}/image.png`,
+      owner: null,
+    };
+  });
+}
