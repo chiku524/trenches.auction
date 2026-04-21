@@ -2,10 +2,24 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { computeClockTraits } from "./time-traits";
 import { buildMetaplexStyleJson, type Dna, type DynamicState } from "./nft-metadata";
+import { serverMintCompressedNft } from "./cnft-server-mint";
+import { registerSolanaCnft } from "./token-registry";
+import {
+  MINT_CHALLENGE_PREFIX,
+  isChallengeFresh,
+  parseChallengeTimestamp,
+  sha256Hex,
+  verifyWalletSignMessage,
+} from "./mint-auth";
+import { fetchCnftsByTree } from "./gallery-das";
+
+const CHALLENGE_MAX_AGE_MS = 5 * 60 * 1000;
 
 type Secrets = {
   ADMIN_SECRET?: string;
   PINATA_JWT?: string;
+  CNFT_MINT_KEYPAIR?: string;
+  CNFT_RPC_URL?: string;
 };
 
 const app = new Hono<{ Bindings: Env & Secrets }>();
@@ -18,6 +32,10 @@ app.get("/", (c) =>
     health: "/v1/health",
     metadata_solana: "/v1/metadata/solana/:mint",
     metadata_base: "/v1/metadata/base/:contract/:tokenId",
+    gallery: "/v1/gallery/cnft",
+    mint_challenge: "GET /v1/mint/cnft/challenge",
+    mint_submit: "POST /v1/mint/cnft",
+    ui: "/ (static gallery + mint after build:web)",
   })
 );
 
@@ -27,6 +45,128 @@ app.get("/v1/health", (c) =>
     time: new Date().toISOString(),
   })
 );
+
+app.get("/v1/mint/cnft/challenge", (c) => {
+  const message = `${MINT_CHALLENGE_PREFIX}${Date.now()}`;
+  return c.json({
+    message,
+    expiresInSeconds: Math.floor(CHALLENGE_MAX_AGE_MS / 1000),
+  });
+});
+
+app.post("/v1/mint/cnft", async (c) => {
+  const keypair = c.env.CNFT_MINT_KEYPAIR;
+  const rpc = c.env.CNFT_RPC_URL;
+  const tree = c.env.CNFT_MERKLE_TREE?.trim();
+  if (!keypair || !rpc || !tree) {
+    return c.json(
+      {
+        error:
+          "cNFT mint not configured: set secrets CNFT_MINT_KEYPAIR, CNFT_RPC_URL and var CNFT_MERKLE_TREE",
+      },
+      503
+    );
+  }
+
+  let body: {
+    recipient?: string;
+    message?: string;
+    signature?: string;
+    name?: string;
+    symbol?: string;
+  };
+  try {
+    body = (await c.req.json()) as typeof body;
+  } catch {
+    return c.json({ error: "invalid JSON" }, 400);
+  }
+
+  const recipient = body.recipient?.trim();
+  const message = body.message?.trim();
+  const signature = body.signature?.trim();
+  if (!recipient || !message || !signature) {
+    return c.json({ error: "recipient, message, and signature are required" }, 400);
+  }
+
+  const ts = parseChallengeTimestamp(message);
+  if (ts === null) {
+    return c.json({ error: "invalid challenge message" }, 400);
+  }
+  if (!isChallengeFresh(ts, Date.now(), CHALLENGE_MAX_AGE_MS)) {
+    return c.json({ error: "challenge expired" }, 400);
+  }
+
+  const hash = await sha256Hex(message);
+  const used = await c.env.DB.prepare(`SELECT message_hash FROM mint_challenge_used WHERE message_hash = ?`)
+    .bind(hash)
+    .first<{ message_hash: string }>();
+  if (used) {
+    return c.json({ error: "challenge already used" }, 409);
+  }
+
+  if (!verifyWalletSignMessage(recipient, message, signature)) {
+    return c.json({ error: "invalid signature" }, 401);
+  }
+
+  const royaltyBps = Number.parseInt(c.env.CNFT_ROYALTY_BPS ?? "500", 10);
+  const name = body.name?.trim() || `Trenches #${ts}`;
+  const symbol = body.symbol?.trim() || "TRNCH";
+
+  let minted: Awaited<ReturnType<typeof serverMintCompressedNft>>;
+  try {
+    minted = await serverMintCompressedNft({
+      rpcUrl: rpc,
+      mintAuthorityKeypairJson: keypair,
+      merkleTree: tree,
+      recipient,
+      publicBaseUrl: c.env.PUBLIC_BASE_URL,
+      royaltyBps: Number.isFinite(royaltyBps) ? royaltyBps : 500,
+      name,
+      symbol,
+    });
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return c.json({ error: "mint_failed", detail: msg.slice(0, 2000) }, 502);
+  }
+
+  await c.env.DB.prepare(`INSERT INTO mint_challenge_used (message_hash) VALUES (?)`).bind(hash).run();
+
+  try {
+    await registerSolanaCnft(c.env.DB, minted.assetId, name, symbol);
+  } catch (regErr) {
+    return c.json(
+      {
+        ok: true,
+        warning: "minted_on_chain_but_db_registration_failed",
+        minted,
+        registerError: regErr instanceof Error ? regErr.message : String(regErr),
+      },
+      201
+    );
+  }
+
+  return c.json({ ok: true, ...minted }, 201);
+});
+
+app.get("/v1/gallery/cnft", async (c) => {
+  const rpc = c.env.CNFT_RPC_URL;
+  const tree = c.env.CNFT_MERKLE_TREE?.trim();
+  if (!rpc || !tree) {
+    return c.json({
+      items: [],
+      configured: false,
+      hint: "Set CNFT_RPC_URL secret and CNFT_MERKLE_TREE var",
+    });
+  }
+  const limRaw = c.req.query("limit");
+  const lim = Math.min(1000, Math.max(1, Number.parseInt(limRaw ?? "200", 10) || 200));
+  const { items, error } = await fetchCnftsByTree(rpc, tree, lim);
+  return c.json(
+    { items, configured: true, tree, error: error ?? null },
+    200,
+    { "Cache-Control": "public, max-age=30" }
+  );
+});
 
 function canonicalTokenId(chain: "solana" | "base", mintOrContract: string, tokenId: string): string {
   const m = mintOrContract.trim();

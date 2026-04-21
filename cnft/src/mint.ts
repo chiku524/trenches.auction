@@ -6,12 +6,10 @@
  */
 import { publicKey, none, some } from "@metaplex-foundation/umi";
 import {
-  mintV1,
+  mintV2,
   TokenStandard,
-  TokenProgramVersion,
   fetchTreeConfigFromSeeds,
   findLeafAssetIdPda,
-  parseLeafFromMintV1Transaction,
   parseLeafFromMintV2Transaction,
 } from "@metaplex-foundation/mpl-bubblegum";
 import { createTrenchesUmi } from "./createUmi.js";
@@ -54,9 +52,11 @@ async function main(): Promise<void> {
   const uri =
     uriOverride ?? `${getMetadataBaseUrl()}/v1/metadata/solana/${assetIdStr}`;
 
-  const tx = await mintV1(umi, {
+  const tx = await mintV2(umi, {
     merkleTree,
     leafOwner,
+    leafDelegate: leafOwner,
+    treeCreatorOrDelegate: umi.identity,
     metadata: {
       name,
       symbol,
@@ -64,11 +64,8 @@ async function main(): Promise<void> {
       sellerFeeBasisPoints: Number.parseInt(process.env.ROYALTY_BPS ?? "500", 10),
       primarySaleHappened: false,
       isMutable: true,
-      editionNonce: none(),
       tokenStandard: some(TokenStandard.NonFungible),
       collection: none(),
-      uses: none(),
-      tokenProgramVersion: TokenProgramVersion.Original,
       creators: [
         {
           address: umi.identity.publicKey,
@@ -83,15 +80,10 @@ async function main(): Promise<void> {
 
   let verifiedId = assetIdStr;
   try {
-    const leaf = await parseLeafFromMintV1Transaction(umi, sig.signature);
+    const leaf = await parseLeafFromMintV2Transaction(umi, sig.signature);
     verifiedId = leaf.id.toString();
   } catch {
-    try {
-      const leaf = await parseLeafFromMintV2Transaction(umi, sig.signature);
-      verifiedId = leaf.id.toString();
-    } catch {
-      // rely on precomputed asset id
-    }
+    // Without MPL Core collection, parser may not match; precomputed id still matches PDA derivation.
   }
   if (verifiedId !== assetIdStr) {
     // eslint-disable-next-line no-console

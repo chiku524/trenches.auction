@@ -9,6 +9,8 @@ declare namespace Cloudflare {
 		ASSETS: R2Bucket;
 		DB: D1Database;
 		PUBLIC_BASE_URL: "https://trenches.auction";
+		CNFT_MERKLE_TREE: string;
+		CNFT_ROYALTY_BPS: string;
 	}
 }
 interface Env extends Cloudflare.Env {}
@@ -16,7 +18,7 @@ type StringifyValues<EnvType extends Record<string, unknown>> = {
 	[Binding in keyof EnvType]: EnvType[Binding] extends string ? EnvType[Binding] : string;
 };
 declare namespace NodeJS {
-	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "PUBLIC_BASE_URL">> {}
+	interface ProcessEnv extends StringifyValues<Pick<Cloudflare.Env, "PUBLIC_BASE_URL" | "CNFT_MERKLE_TREE" | "CNFT_ROYALTY_BPS">> {}
 }
 
 // Begin runtime types

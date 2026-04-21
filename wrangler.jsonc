@@ -8,7 +8,13 @@
     "enabled": true
   },
   "vars": {
-    "PUBLIC_BASE_URL": "https://trenches.auction"
+    "PUBLIC_BASE_URL": "https://trenches.auction",
+    "CNFT_MERKLE_TREE": "",
+    "CNFT_ROYALTY_BPS": "500"
+  },
+  "assets": {
+    "directory": "./web/dist",
+    "not_found_handling": "single-page-application"
   },
   "d1_databases": [
     {

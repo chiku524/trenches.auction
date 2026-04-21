@@ -1,3 +1,8 @@
 # Copy to .dev.vars for local wrangler dev (never commit .dev.vars)
 ADMIN_SECRET=generate-a-long-random-string
 PINATA_JWT=your_pinata_jwt_optional
+
+# Server-assisted cNFT mint + DAS gallery (same as wrangler secrets / vars)
+# CNFT_MINT_KEYPAIR=[...]   # JSON array bytes, same as Solana CLI keypair file
+# CNFT_RPC_URL=https://devnet.helius-rpc.com/?api-key=...
+# In wrangler.jsonc set CNFT_MERKLE_TREE to your Bubblegum tree address.
