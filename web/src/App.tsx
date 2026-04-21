@@ -102,7 +102,7 @@ function AdminPanel({
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const [batchCount, setBatchCount] = useState("15");
+  const [batchCount, setBatchCount] = useState("35");
   const [startNumber, setStartNumber] = useState("1");
   const [chainRepeats, setChainRepeats] = useState("1");
   const [namePrefix, setNamePrefix] = useState("Trenches");
@@ -167,7 +167,7 @@ function AdminPanel({
       setErr("Set a target supply (e.g. 10000) or use a preset below.");
       return;
     }
-    const count = Math.max(1, Number.parseInt(batchCount, 10) || 15);
+    const count = Math.max(1, Number.parseInt(batchCount, 10) || 35);
     let start = Math.max(1, Number.parseInt(startNumber, 10) || 1);
     const maxBatches = Math.min(5000, Math.ceil(goal / count) + 100);
     setBusy(true);
@@ -212,7 +212,7 @@ function AdminPanel({
           log.push(`Done — reached target ${goal}.`);
           break;
         }
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 120));
       }
       setStartNumber(String(start));
       setMsg(log.join("\n"));
@@ -236,7 +236,7 @@ function AdminPanel({
       setErr("Connect wallet for recipient address, or paste recipient in a future version.");
       return;
     }
-    const count = Math.max(1, Number.parseInt(batchCount, 10) || 15);
+    const count = Math.max(1, Number.parseInt(batchCount, 10) || 35);
     const repeats = Math.min(500, Math.max(1, Number.parseInt(chainRepeats, 10) || 1));
     let start = Math.max(1, Number.parseInt(startNumber, 10) || 1);
     setBusy(true);
@@ -272,7 +272,7 @@ function AdminPanel({
           log.push("Stopped early (RPC error or tree full).");
           break;
         }
-        await new Promise((r) => setTimeout(r, 400));
+        await new Promise((r) => setTimeout(r, 120));
       }
       setStartNumber(String(start));
       setMsg(log.join("\n"));
@@ -320,9 +320,10 @@ function AdminPanel({
 
       <h3 style={{ fontSize: "0.95rem", marginTop: "1.25rem" }}>Large collection (e.g. 10,000)</h3>
       <p className="msg">
-        Mints to your <strong>connected wallet</strong> in server-side batches (Worker limit ~15 per call by default).
-        A full 10k run can take <strong>15–40+ minutes</strong> — keep this tab open. Requires tree depth ≥ 14 for 16k
-        capacity.
+        Mints to your <strong>connected wallet</strong> in server-side batches (see <code>CNFT_MINT_BATCH_MAX</code> in
+        wrangler; default <strong>35</strong> per HTTP call, max <strong>100</strong>). Each mint is still one on-chain tx
+        in sequence. A 10k run usually takes <strong>many hours</strong> — keep this tab open; refresh the gallery anytime
+        to see D1-registered mints. Tree depth ≥ 14 for 16k capacity.
       </p>
       <div className="actions" style={{ flexWrap: "wrap", alignItems: "center" }}>
         <label>
