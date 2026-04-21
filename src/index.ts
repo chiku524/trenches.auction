@@ -354,7 +354,15 @@ function formatRpcErrorDetail(raw: string, maxLen = 2000): string {
     low.includes("forbidden") ||
     low.includes("blocked") ||
     low.includes("ip or provider");
-  if (!looksBlocked) return msg;
+  const looksBlockhashExpiry =
+    low.includes("block height exceeded") ||
+    low.includes("expired") && low.includes("signature");
+  if (!looksBlocked && !looksBlockhashExpiry) return msg;
+  if (looksBlockhashExpiry) {
+    const hint =
+      " Often caused by slow RPC or preflight delay before the tx lands; retry once, use a faster paid devnet endpoint, or redeploy after Worker RPC timeout/send options were tuned.";
+    return msg.includes("retry") ? msg : msg + hint;
+  }
   const hint =
     " Workers run from datacenter IPs: use CNFT_RPC_URL from a provider that allows server access (Helius, QuickNode, Alchemy, Triton, etc.) with your API key, on the same cluster (devnet vs mainnet) as your tree.";
   return msg.includes("Helius") || msg.includes("QuickNode") ? msg : msg + hint;

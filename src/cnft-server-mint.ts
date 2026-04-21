@@ -1,9 +1,27 @@
 import { createUmi } from "@metaplex-foundation/umi-bundle-defaults";
-import { createSignerFromKeypair, keypairIdentity, none, publicKey, some } from "@metaplex-foundation/umi";
+import {
+  createSignerFromKeypair,
+  keypairIdentity,
+  none,
+  publicKey,
+  some,
+  type TransactionBuilderSendAndConfirmOptions,
+} from "@metaplex-foundation/umi";
 import { fromWeb3JsKeypair } from "@metaplex-foundation/umi-web3js-adapters";
 import { mplBubblegum, mintV2, TokenStandard, fetchTreeConfigFromSeeds, findLeafAssetIdPda, parseLeafFromMintV2Transaction } from "@metaplex-foundation/mpl-bubblegum";
 import { Keypair } from "@solana/web3.js";
 import bs58 from "bs58";
+
+/** Longer confirmation window + skip preflight helps Cloudflare Workers + slow devnet RPC avoid blockhash expiry. */
+const WORKER_RPC_CONNECTION = {
+  commitment: "confirmed" as const,
+  confirmTransactionInitialTimeout: 180_000,
+};
+
+export const workerSendAndConfirmTransactionOptions: TransactionBuilderSendAndConfirmOptions = {
+  send: { skipPreflight: true, maxRetries: 5 },
+  confirm: { commitment: "confirmed" },
+};
 
 export function loadMintAuthorityKeypair(raw: string): Keypair {
   const arr = JSON.parse(raw) as number[];
@@ -14,7 +32,7 @@ export function loadMintAuthorityKeypair(raw: string): Keypair {
 }
 
 export function createWorkerUmi(rpcUrl: string, feePayer: Keypair) {
-  const umi = createUmi(rpcUrl).use(mplBubblegum());
+  const umi = createUmi(rpcUrl, WORKER_RPC_CONNECTION).use(mplBubblegum());
   const kp = fromWeb3JsKeypair(feePayer);
   const signer = createSignerFromKeypair(umi, kp);
   umi.use(keypairIdentity(signer));
@@ -77,7 +95,7 @@ export async function serverMintCompressedNft(input: {
     },
   });
 
-  const sig = await tx.sendAndConfirm(umi);
+  const sig = await tx.sendAndConfirm(umi, workerSendAndConfirmTransactionOptions);
   const sigBytes = sig.signature;
   const signatureBase58 =
     typeof sigBytes === "string"
