@@ -64,6 +64,22 @@ button.primary:disabled {
   cursor: not-allowed;
 }
 
+button.ghost {
+  background: transparent;
+  color: #94a3b8;
+  border: 1px solid #334155;
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  font-size: 0.85rem;
+}
+
+button.ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .msg {
   font-size: 0.85rem;
   color: #94a3b8;

@@ -98,6 +98,9 @@ function AdminPanel({
   const [startNumber, setStartNumber] = useState("1");
   const [chainRepeats, setChainRepeats] = useState("1");
   const [namePrefix, setNamePrefix] = useState("Trenches");
+  /** Total NFTs to mint in one run (10k workflow). */
+  const [targetSupply, setTargetSupply] = useState("");
+  const [progressLine, setProgressLine] = useState("");
 
   const createTree = useCallback(async () => {
     setErr("");
@@ -138,6 +141,81 @@ function AdminPanel({
       setBusy(false);
     }
   }, [adminSecret, maxDepth, onTreeCreated]);
+
+  const mintTowardTarget = useCallback(async () => {
+    setErr("");
+    setMsg("");
+    setProgressLine("");
+    if (!adminSecret.trim()) {
+      setErr("Admin secret required.");
+      return;
+    }
+    if (!publicKey) {
+      setErr("Connect your wallet — NFTs are minted to the connected address.");
+      return;
+    }
+    const goal = Math.min(100_000, Math.max(1, Number.parseInt(targetSupply.trim(), 10) || 0));
+    if (!Number.isFinite(goal) || goal < 1) {
+      setErr("Set a target supply (e.g. 10000) or use a preset below.");
+      return;
+    }
+    const count = Math.max(1, Number.parseInt(batchCount, 10) || 15);
+    let start = Math.max(1, Number.parseInt(startNumber, 10) || 1);
+    const maxBatches = Math.min(5000, Math.ceil(goal / count) + 100);
+    setBusy(true);
+    const log: string[] = [];
+    let totalThisRun = 0;
+    try {
+      for (let b = 0; b < maxBatches && totalThisRun < goal; b++) {
+        const remaining = goal - totalThisRun;
+        const thisCount = Math.min(count, remaining);
+        setProgressLine(`Minting… ${totalThisRun} / ${goal} (batch ${b + 1})`);
+        const res = await fetch(`${API_BASE}/v1/admin/cnft/mint-batch`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-admin-secret": adminSecret.trim(),
+          },
+          body: JSON.stringify({
+            recipient: publicKey,
+            count: thisCount,
+            namePrefix: namePrefix.trim() || "Trenches",
+            symbol: "TRNCH",
+            startNumber: start,
+          }),
+        });
+        const body = (await res.json()) as {
+          minted?: number;
+          results?: { ok?: boolean; name?: string; error?: string }[];
+        };
+        if (!res.ok) {
+          throw new Error(JSON.stringify(body).slice(0, 500));
+        }
+        const minted = body.minted ?? 0;
+        totalThisRun += minted;
+        start += minted;
+        log.push(`Batch ${b + 1}: +${minted} (total ${totalThisRun} / ${goal}, next #${start})`);
+        setProgressLine(`Minted ${totalThisRun} / ${goal}`);
+        if (minted < thisCount) {
+          log.push("Stopped early (RPC error, rate limit, or tree full).");
+          break;
+        }
+        if (totalThisRun >= goal) {
+          log.push(`Done — reached target ${goal}.`);
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 400));
+      }
+      setStartNumber(String(start));
+      setMsg(log.join("\n"));
+      onTreeCreated();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    } finally {
+      setBusy(false);
+      setProgressLine("");
+    }
+  }, [adminSecret, batchCount, namePrefix, publicKey, startNumber, targetSupply, onTreeCreated]);
 
   const mintBatchChain = useCallback(async () => {
     setErr("");
@@ -203,8 +281,8 @@ function AdminPanel({
       <h2>Collection setup (admin)</h2>
       <p className="msg">
         Creates the on-chain Bubblegum V2 Merkle tree and stores it in D1 (no <code>CNFT_MERKLE_TREE</code> var
-        needed). For a ~10k drop, use depth <strong>14</strong> (16,384 leaves). Minting runs in small batches to
-        stay within Worker time limits — use <strong>chain repeats</strong> to continue (e.g. 15 × 667 ≈ 10k).
+        needed). For a ~10k drop, use depth <strong>14</strong> (16,384 leaves). Then use <strong>Large collection</strong>{" "}
+        below with the <strong>10k</strong> preset (or enter any target).
       </p>
       <p className="msg err">
         Never share your admin secret; this UI is for operators only. Prefer a secure admin environment for
@@ -232,16 +310,66 @@ function AdminPanel({
         </button>
       </div>
 
-      <h3 style={{ fontSize: "0.95rem", marginTop: "1.25rem" }}>Batch mint (procedural traits)</h3>
-      <div className="actions" style={{ flexWrap: "wrap" }}>
+      <h3 style={{ fontSize: "0.95rem", marginTop: "1.25rem" }}>Large collection (e.g. 10,000)</h3>
+      <p className="msg">
+        Mints to your <strong>connected wallet</strong> in server-side batches (Worker limit ~15 per call by default).
+        A full 10k run can take <strong>15–40+ minutes</strong> — keep this tab open. Requires tree depth ≥ 14 for 16k
+        capacity.
+      </p>
+      <div className="actions" style={{ flexWrap: "wrap", alignItems: "center" }}>
         <label>
-          Per batch{" "}
+          Target supply{" "}
+          <input
+            type="text"
+            inputMode="numeric"
+            value={targetSupply}
+            onChange={(e) => setTargetSupply(e.target.value)}
+            placeholder="10000"
+            style={{ width: "5.5rem" }}
+          />
+        </label>
+        <span className="msg" style={{ marginRight: "0.25rem" }}>
+          Presets:
+        </span>
+        <button type="button" className="ghost" disabled={busy} onClick={() => setTargetSupply("100")}>
+          100
+        </button>
+        <button type="button" className="ghost" disabled={busy} onClick={() => setTargetSupply("1000")}>
+          1k
+        </button>
+        <button type="button" className="ghost" disabled={busy} onClick={() => setTargetSupply("10000")}>
+          10k
+        </button>
+        <label style={{ marginLeft: "0.5rem" }}>
+          Batch size{" "}
           <input type="text" value={batchCount} onChange={(e) => setBatchCount(e.target.value)} style={{ width: "2.5rem" }} />
         </label>
         <label>
           Start #{" "}
           <input type="text" value={startNumber} onChange={(e) => setStartNumber(e.target.value)} style={{ width: "3.5rem" }} />
         </label>
+        <label>
+          Name prefix{" "}
+          <input type="text" value={namePrefix} onChange={(e) => setNamePrefix(e.target.value)} />
+        </label>
+        <button
+          type="button"
+          className="primary"
+          disabled={busy || !publicKey}
+          onClick={() => void mintTowardTarget()}
+        >
+          {busy ? "Minting…" : "Mint toward target"}
+        </button>
+      </div>
+      {progressLine ? (
+        <p className="msg ok" style={{ marginTop: "0.5rem" }}>
+          {progressLine}
+        </p>
+      ) : null}
+
+      <h3 style={{ fontSize: "0.95rem", marginTop: "1.5rem" }}>Advanced: fixed batch count</h3>
+      <p className="msg">Run exactly N batches (for testing). Same fields except use chain repeats instead of target.</p>
+      <div className="actions" style={{ flexWrap: "wrap" }}>
         <label>
           Chain repeats{" "}
           <input
@@ -250,10 +378,6 @@ function AdminPanel({
             onChange={(e) => setChainRepeats(e.target.value)}
             style={{ width: "3.5rem" }}
           />
-        </label>
-        <label>
-          Name prefix{" "}
-          <input type="text" value={namePrefix} onChange={(e) => setNamePrefix(e.target.value)} />
         </label>
         <button type="button" className="primary" disabled={busy || !publicKey} onClick={() => void mintBatchChain()}>
           {busy ? "Minting…" : "Run batch chain"}
