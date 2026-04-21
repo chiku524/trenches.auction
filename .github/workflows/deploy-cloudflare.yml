@@ -1,19 +1,36 @@
 # Repository secrets (Settings → Secrets and variables → Actions):
-#   CLOUDFLARE_ACCOUNT_ID — Workers overview URL or dashboard sidebar (32-char hex)
-#   CLOUDFLARE_API_TOKEN — Create at https://dash.cloudflare.com/profile/api-tokens
+#   CLOUDFLARE_ACCOUNT_ID — Workers dashboard → sidebar or URL (32-character hex, no quotes)
+#   CLOUDFLARE_API_TOKEN — see below
 #
-# If deploy fails with Authentication error [10000] or memberships [9106], the token is missing
-# scopes or is not an Account API token. Use "Create Custom Token" and include at minimum:
-#   Account  → Workers Scripts              → Edit
-#   Account  → Workers Tail                 → Read   (optional; helps wrangler tail)
-#   Account  → D1                           → Edit   (this project uses D1)
-#   Account  → Workers R2 Storage           → Edit   (R2 bucket binding)
-#   Account  → Workers Builds Configuration → Edit   (if wrangler/version needs it)
-#   Account  → Account Settings             → Read   (often required for account resolution)
-#   User     → Memberships                 → Read   (fixes some wrangler whoami / 9106 errors)
+# ---
+# Why you may see BOTH [10000] on /workers/services AND [9106] on /memberships
 #
-# Quick path: "Create Token" → use template "Edit Cloudflare Workers", then Edit token and add
-# D1 Edit + Workers R2 Storage Edit + User Memberships Read if deploy still fails.
+# The first error is the real one: Cloudflare rejected the Workers API call (bad token, wrong
+# account ID in CLOUDFLARE_ACCOUNT_ID, or token not allowed to manage Workers on that account).
+# Wrangler may then print extra diagnostics that call user-only endpoints; Account API Tokens
+# cannot use /memberships, so you can see [9106] even after account id is set — focus on fixing
+# [10000] first.
+#
+# ---
+# Token type (important)
+#
+# - User API token (recommended for CI): https://dash.cloudflare.com/profile/api-tokens
+#   Use template "Edit Cloudflare Workers", then add Account → D1 → Edit and
+#   Account → Workers R2 Storage → Edit. Includes user scopes Wrangler may use for diagnostics.
+#
+# - Account-owned API token: https://dash.cloudflare.com/?to=/:account/api-tokens
+#   Must include Workers Scripts → Edit, D1 → Edit, R2 → Edit for this project. Under "Account
+#   Resources", include this account (or All accounts). These tokens cannot call /memberships;
+#   you MUST set CLOUDFLARE_ACCOUNT_ID (this workflow enforces length) or `account_id` in
+#   wrangler.jsonc — see https://github.com/cloudflare/workers-sdk/issues/9129
+#
+# ---
+# Creating a token via CLI
+#
+# Wrangler does not create long-lived API tokens. Use the dashboard, or Cloudflare's HTTP API
+# with an existing credential that is allowed to create tokens:
+# https://developers.cloudflare.com/fundamentals/api/how-to/create-via-api/
+#
 name: Deploy to Cloudflare Workers
 
 on:
@@ -41,8 +58,34 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Build web + deploy Worker
-        run: npm run deploy
+      - name: Verify Cloudflare secrets (shape only)
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          ACCT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::error::CLOUDFLARE_API_TOKEN is empty. Add it under Repo Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          acct_len=${#ACCT}
+          if [ "$acct_len" -ne 32 ]; then
+            echo "::error::CLOUDFLARE_ACCOUNT_ID must be exactly 32 characters (got length ${acct_len}). Copy it from Workers → Overview; remove quotes/whitespace from the secret."
+            exit 1
+          fi
+          case "$ACCT" in
+            *[![:xdigit:]]*)
+              echo "::error::CLOUDFLARE_ACCOUNT_ID must be hexadecimal (0-9, a-f). Check for typos or stray characters."
+              exit 1
+              ;;
+          esac
+
+      - name: Build web (Vite)
+        run: npm run build:web
+
+      - name: Deploy Worker
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          wranglerVersion: "4.84.0"
+          command: deploy
