@@ -94,8 +94,7 @@ export async function fetchGalleryFromD1(
       name: r.name,
       symbol: r.symbol,
       uri: `${base}/v1/metadata/solana/${encodeURIComponent(assetId)}`,
-      // Only set when R2 has `images/.../preview.png` via upload; otherwise <img> would 404 spam the console.
-      image: null,
+      image: `${base}/v1/cnft/preview/${encodeURIComponent(assetId)}`,
       owner: null,
     };
   });

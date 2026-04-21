@@ -25,7 +25,7 @@ const SPECIES = [
 const MOODS = ["Hungry", "Curious", "Migrating", "Brooding", "Hunting", "Dreaming"] as const;
 
 /** Deterministic FNV-1a-ish 32-bit hash for reproducible collection rolls. */
-function hash32(input: string): number {
+export function hash32(input: string): number {
   let h = 2166136261;
   for (let i = 0; i < input.length; i++) {
     h ^= input.charCodeAt(i);

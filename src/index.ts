@@ -15,6 +15,7 @@ import { fetchCnftsByTree, fetchGalleryFromD1 } from "./gallery-das";
 import { serverCreateTreeV2 } from "./cnft-tree";
 import { getPersistedCnftTree, resolveMerkleTreeAddress } from "./cnft-runtime";
 import { dnaForAssetId } from "./collection-traits";
+import { responseForCnftPreview } from "./cnft-preview";
 
 const CHALLENGE_MAX_AGE_MS = 5 * 60 * 1000;
 const DEFAULT_MINT_BATCH_MAX = 20;
@@ -36,6 +37,7 @@ app.get("/", (c) =>
     health: "/v1/health",
     metadata_solana: "/v1/metadata/solana/:mint",
     metadata_base: "/v1/metadata/base/:contract/:tokenId",
+    cnft_preview: "/v1/cnft/preview/:mint (R2 if uploaded, else SVG from DNA)",
     gallery: "/v1/gallery/cnft",
     mint_challenge: "GET /v1/mint/cnft/challenge",
     mint_submit: "POST /v1/mint/cnft",
@@ -286,7 +288,8 @@ async function buildMetadataForToken(
   const immutable = parseDna(row.immutable_dna);
   const clock = computeClockTraits();
   const base = c.env.PUBLIC_BASE_URL.replace(/\/$/, "");
-  const imageUrl = `${base}/v1/asset/${encodeURIComponent(id)}/image.png`;
+  // R2 upload wins inside this route; else deterministic SVG from DNA.
+  const imageUrl = `${base}/v1/cnft/preview/${encodeURIComponent(row.mint_or_contract)}`;
   const animationUrl =
     typeof dynamic.animation_url === "string" ? String(dynamic.animation_url) : `${base}/v1/viewer/${encodeURIComponent(id)}`;
 
@@ -319,6 +322,8 @@ app.get("/v1/metadata/solana/:mint", async (c) => {
     "Cache-Control": "public, max-age=60, s-maxage=60",
   });
 });
+
+app.get("/v1/cnft/preview/:mint", (c) => responseForCnftPreview(c.env, c.req.param("mint")));
 
 app.get("/v1/metadata/base/:contract/:tokenId", async (c) => {
   const contract = decodeURIComponent(c.req.param("contract"));

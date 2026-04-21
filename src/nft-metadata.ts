@@ -44,7 +44,7 @@ export function buildMetaplexStyleJson(input: {
     properties: {
       category: "image",
       files: [
-        { uri: input.imageUrl, type: "image/png" },
+        { uri: input.imageUrl, type: "image/*" },
         ...(input.animationUrl ? [{ uri: input.animationUrl, type: "text/html" }] : []),
       ],
     },
