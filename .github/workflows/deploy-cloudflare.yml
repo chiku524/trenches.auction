@@ -25,8 +25,12 @@
 #   Account → Workers R2 Storage → Edit.
 #
 # - Account-owned API token: https://dash.cloudflare.com/?to=/:account/api-tokens
-#   Must include Workers Scripts → Edit, D1 → Edit, R2 → Edit. Under "Account Resources",
-#   include this account (or All accounts). See https://github.com/cloudflare/workers-sdk/issues/9129
+#   Use template "Edit Cloudflare Workers", then add D1 + R2 as above. Critical scopes:
+#     Account → Workers Scripts → Edit  (required for /workers/services — without it you get [10000])
+#     Account → Workers Builds Configuration → Edit  (often required for modern `wrangler deploy`, esp. with assets)
+#   Under "Account Resources": Include → this account (or All accounts).
+#   Under "Zone Resources": prefer Include → All zones for that account — zone-only tokens often fail deploy with [10000] even when account is correct.
+#   See https://github.com/cloudflare/workers-sdk/issues/9129
 #
 # ---
 # Creating a token via CLI
@@ -69,6 +73,39 @@ jobs:
             echo "::error::CLOUDFLARE_API_TOKEN is empty. Add it under Repo Settings → Secrets and variables → Actions."
             exit 1
           fi
+
+      # Lists permission group names Cloudflare associates with this token (no token value printed).
+      # Account-owned tokens may fail this endpoint — that is expected; use a User token from Profile for CI if unsure.
+      - name: Cloudflare token — permission names (debug)
+        continue-on-error: true
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          python3 <<'PY'
+          import json, os, urllib.error, urllib.request
+          req = urllib.request.Request(
+              "https://api.cloudflare.com/client/v4/user/tokens/verify",
+              headers={"Authorization": f"Bearer {os.environ['CLOUDFLARE_API_TOKEN']}"},
+          )
+          try:
+              with urllib.request.urlopen(req, timeout=30) as resp:
+                  data = json.load(resp)
+          except urllib.error.HTTPError as e:
+              body = e.read().decode()
+              print("verify HTTP error:", e.code, body[:500])
+              raise SystemExit(0)
+          print("success:", data.get("success"))
+          if data.get("errors"):
+              print("errors:", data["errors"])
+          res = data.get("result") or {}
+          names = []
+          for pol in res.get("policies") or []:
+              for g in pol.get("permission_groups") or []:
+                  n = g.get("name")
+                  if n:
+                      names.append(n)
+          print("permission_groups:", sorted(set(names)))
+          PY
 
       - name: Build web (Vite)
         run: npm run build:web
