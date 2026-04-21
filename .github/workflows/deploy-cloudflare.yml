@@ -1,6 +1,19 @@
-# Requires repository secrets:
-#   CLOUDFLARE_API_TOKEN — Workers deploy (Create with Edit Cloudflare Workers permission)
-#   CLOUDFLARE_ACCOUNT_ID — Cloudflare dashboard right sidebar
+# Repository secrets (Settings → Secrets and variables → Actions):
+#   CLOUDFLARE_ACCOUNT_ID — Workers overview URL or dashboard sidebar (32-char hex)
+#   CLOUDFLARE_API_TOKEN — Create at https://dash.cloudflare.com/profile/api-tokens
+#
+# If deploy fails with Authentication error [10000] or memberships [9106], the token is missing
+# scopes or is not an Account API token. Use "Create Custom Token" and include at minimum:
+#   Account  → Workers Scripts              → Edit
+#   Account  → Workers Tail                 → Read   (optional; helps wrangler tail)
+#   Account  → D1                           → Edit   (this project uses D1)
+#   Account  → Workers R2 Storage           → Edit   (R2 bucket binding)
+#   Account  → Workers Builds Configuration → Edit   (if wrangler/version needs it)
+#   Account  → Account Settings             → Read   (often required for account resolution)
+#   User     → Memberships                 → Read   (fixes some wrangler whoami / 9106 errors)
+#
+# Quick path: "Create Token" → use template "Edit Cloudflare Workers", then Edit token and add
+# D1 Edit + Workers R2 Storage Edit + User Memberships Read if deploy still fails.
 name: Deploy to Cloudflare Workers
 
 on:
