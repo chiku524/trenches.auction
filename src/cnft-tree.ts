@@ -1,7 +1,12 @@
 import { generateSigner, some } from "@metaplex-foundation/umi";
 import { createTreeV2 } from "@metaplex-foundation/mpl-bubblegum";
 import bs58 from "bs58";
-import { createWorkerUmi, loadMintAuthorityKeypair, workerSendAndConfirmTransactionOptions } from "./cnft-server-mint";
+import {
+  createWorkerUmi,
+  loadMintAuthorityKeypair,
+  sendAndConfirmWithStatusFallback,
+  workerSendAndConfirmTransactionOptions,
+} from "./cnft-server-mint";
 
 export type CreateTreeV2ServerResult = {
   merkleTree: string;
@@ -35,7 +40,7 @@ export async function serverCreateTreeV2(input: {
     public: some(input.treePublic),
   });
 
-  const sig = await tx.sendAndConfirm(umi, workerSendAndConfirmTransactionOptions);
+  const sig = await sendAndConfirmWithStatusFallback(umi, tx, workerSendAndConfirmTransactionOptions);
   const sigBytes = sig.signature;
   const signatureBase58 =
     typeof sigBytes === "string"

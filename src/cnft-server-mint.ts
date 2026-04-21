@@ -5,7 +5,10 @@ import {
   none,
   publicKey,
   some,
+  type Context,
+  type TransactionBuilder,
   type TransactionBuilderSendAndConfirmOptions,
+  type TransactionSignature,
 } from "@metaplex-foundation/umi";
 import { fromWeb3JsKeypair } from "@metaplex-foundation/umi-web3js-adapters";
 import { mplBubblegum, mintV2, TokenStandard, fetchTreeConfigFromSeeds, findLeafAssetIdPda, parseLeafFromMintV2Transaction } from "@metaplex-foundation/mpl-bubblegum";
@@ -15,13 +18,70 @@ import bs58 from "bs58";
 /** Longer confirmation window + skip preflight helps Cloudflare Workers + slow devnet RPC avoid blockhash expiry. */
 const WORKER_RPC_CONNECTION = {
   commitment: "confirmed" as const,
-  confirmTransactionInitialTimeout: 180_000,
+  confirmTransactionInitialTimeout: 300_000,
 };
 
 export const workerSendAndConfirmTransactionOptions: TransactionBuilderSendAndConfirmOptions = {
-  send: { skipPreflight: true, maxRetries: 5 },
+  send: { skipPreflight: true, maxRetries: 8 },
   confirm: { commitment: "confirmed" },
 };
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+function isLikelyBlockhashOrConfirmTimeout(msg: string): boolean {
+  const m = msg.toLowerCase();
+  return (
+    m.includes("block height exceeded") ||
+    m.includes("block height") ||
+    (m.includes("expired") && m.includes("signature")) ||
+    m.includes("transactionexpired") ||
+    m.includes("timed out waiting")
+  );
+}
+
+/**
+ * `Connection.confirmTransaction` can throw "block height exceeded" while the tx is still
+ * landing on slow devnet RPCs. Poll signature status after that error.
+ */
+export async function sendAndConfirmWithStatusFallback(
+  umi: Pick<Context, "rpc" | "transactions" | "payer">,
+  builder: TransactionBuilder,
+  opts: TransactionBuilderSendAndConfirmOptions
+): Promise<{ signature: TransactionSignature }> {
+  let b = builder;
+  if (!builder.options.blockhash) {
+    b = await builder.setLatestBlockhash(umi);
+  }
+  const signature = await b.send(umi, opts.send ?? {});
+  try {
+    await b.confirm(umi, signature, opts.confirm ?? {});
+    return { signature };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    if (!isLikelyBlockhashOrConfirmTimeout(msg)) {
+      throw e;
+    }
+    // Cap polls to stay under Cloudflare's ~100 subrequests per invocation (tx already used several).
+    const maxPolls = 55;
+    const intervalMs = 5000;
+    for (let i = 0; i < maxPolls; i++) {
+      await sleep(intervalMs);
+      const statuses = await umi.rpc.getSignatureStatuses([signature], {
+        searchTransactionHistory: true,
+      });
+      const st = statuses[0];
+      if (st?.error) {
+        throw new Error(`Transaction failed on-chain: ${JSON.stringify(st.error)}`);
+      }
+      if (st?.commitment === "processed" || st?.commitment === "confirmed" || st?.commitment === "finalized") {
+        return { signature };
+      }
+    }
+    throw e;
+  }
+}
 
 export function loadMintAuthorityKeypair(raw: string): Keypair {
   const arr = JSON.parse(raw) as number[];
@@ -95,7 +155,7 @@ export async function serverMintCompressedNft(input: {
     },
   });
 
-  const sig = await tx.sendAndConfirm(umi, workerSendAndConfirmTransactionOptions);
+  const sig = await sendAndConfirmWithStatusFallback(umi, tx, workerSendAndConfirmTransactionOptions);
   const sigBytes = sig.signature;
   const signatureBase58 =
     typeof sigBytes === "string"
