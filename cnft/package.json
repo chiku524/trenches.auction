@@ -1,0 +1,26 @@
+{
+  "name": "@trenches/cnft",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Solana compressed NFT (Bubblegum) CLI — tree setup + mint",
+  "scripts": {
+    "create-tree": "tsx src/create-tree.ts",
+    "mint": "tsx src/mint.ts",
+    "register-token": "tsx src/register-token.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@metaplex-foundation/mpl-bubblegum": "^5.0.2",
+    "@metaplex-foundation/umi": "^1.5.1",
+    "@metaplex-foundation/umi-bundle-defaults": "^1.5.1",
+    "@metaplex-foundation/umi-web3js-adapters": "^1.5.1",
+    "@solana/web3.js": "^1.98.4",
+    "dotenv": "^17.4.2"
+  },
+  "devDependencies": {
+    "@types/node": "^25.6.0",
+    "tsx": "^4.21.0",
+    "typescript": "^6.0.3"
+  }
+}

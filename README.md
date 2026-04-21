@@ -2,6 +2,20 @@
 
 This repository is a **Cloudflare Worker** that serves **JSON metadata**, **R2-hosted previews / GLB keys**, **D1 state** for dynamic traits, and optional **Pinata IPFS** pins for permanent URIs.
 
+## Solana compressed NFTs (minting)
+
+The `cnft/` package creates a **Bubblegum Merkle tree** and **mints cNFTs** with metadata URIs pointing at this Worker. After funding a devnet wallet, run:
+
+```bash
+cd cnft && cp .env.example .env
+# set KEYPAIR_PATH, CLUSTER=devnet, METADATA_BASE_URL=https://trenches.auction
+npm install
+npm run create-tree   # once per collection — signs on-chain
+npm run mint -- --name "Example #1"   # signs one mint
+```
+
+See `cnft/README.md` for details. Register minted asset ids in D1 via `POST /v1/admin/tokens` or `npm run register-token` from `cnft/`.
+
 ## What was provisioned (CLI)
 
 | Resource | Name / ID |
