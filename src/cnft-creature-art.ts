@@ -1,55 +1,19 @@
-import { hash32, SPECIES } from "./collection-traits";
+import { hash32 } from "./collection-traits";
+import {
+  getArtVisualTraits,
+  getBiomePalette,
+  getLuminosityL,
+  getSpeciesArchetypeIndex,
+  type CnftArtPalette,
+  type CnftArtVisualTraits,
+} from "./cnft-visual-shared";
 import type { Dna } from "./nft-metadata";
 
-const SPECIES_LIST: readonly string[] = SPECIES;
+type Palette = CnftArtPalette;
+type VisualTraits = CnftArtVisualTraits;
 
 function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-}
-
-type Palette = { deep: string; water: string; skin: string; skinHi: string; biolume: string; shadow: string };
-
-function biomePalette(biome: string, mint: string): Palette {
-  const b = (biome || "").toLowerCase();
-  const s = (a: string, c: string, w: string, h: string, l: string, sh: string): Palette => ({
-    deep: a,
-    water: c,
-    skin: w,
-    skinHi: h,
-    biolume: l,
-    shadow: sh,
-  });
-  if (b.includes("hydrothermal") || b.includes("fan")) {
-    return s("#150810", "#3d1510", "#6a3020", "#a0522d", "#ffae55", "#0a0406");
-  }
-  if (b.includes("kelp") || b.includes("forest")) {
-    return s("#031c18", "#0a5c4a", "#126054", "#34d3b0", "#7efce8", "#021210");
-  }
-  if (b.includes("brine")) {
-    return s("#031428", "#0d5278", "#1a6b85", "#8ecfff", "#38bdf8", "#010a12");
-  }
-  if (b.includes("seamount")) {
-    return s("#0a1528", "#264572", "#3d5a7c", "#b8d4f8", "#f6d36a", "#070f1a");
-  }
-  if (b.includes("canyon") || b.includes("phantom")) {
-    return s("#0e0a1c", "#2a2060", "#4f3d7a", "#b4a0f0", "#d8b4fe", "#06030f");
-  }
-  if (b.includes("trenches") || b.includes("wall")) {
-    return s("#01040c", "#0b1628", "#2a3f55", "#8aa0b0", "#6ee7f5", "#000208");
-  }
-  if (b.includes("seep") || b.includes("cold")) {
-    return s("#0a1a24", "#1a5568", "#1f6f82", "#9ae6f0", "#c5f0fa", "#030d14");
-  }
-  const h = hash32(mint + "::palette");
-  const hue = 200 + (h % 20);
-  return s(
-    `hsl(${hue} 48% 7%)`,
-    `hsl(${hue} 42% 14%)`,
-    `hsl(${(hue + 6) % 360} 32% 30%)`,
-    `hsl(${(hue + 12) % 360} 38% 48%)`,
-    `hsl(${(hue + 185) % 360} 75% 55%)`,
-    "hsl(222 32% 5%)"
-  );
 }
 
 function rnd(mint: string, salt: string, mod: number): number {
@@ -60,44 +24,6 @@ function num(dna: Dna, key: string, def: number, min: number, max: number): numb
   const v = dna[key];
   if (typeof v === "number" && !Number.isNaN(v)) return Math.max(min, Math.min(max, v));
   return def;
-}
-
-function archetype(species: string, mint: string): number {
-  const i = SPECIES_LIST.indexOf(species);
-  if (i >= 0) return i;
-  return hash32(mint) % 8;
-}
-
-/** Maps metadata mood → pose (Trait-driven posture). */
-type MoodT = { dy: number; rot: number; sc: number; tentacleK: number; finSpread: number };
-
-type VisualTraits = {
-  pressure: number;
-  L: number;
-  mood: string;
-  variantSeed: number;
-  moodT: MoodT;
-};
-
-function moodToLayout(mood: string): MoodT {
-  const m = (mood || "").toLowerCase();
-  if (m.includes("ambush") || m.includes("lie-in")) return { dy: 10, rot: 0, sc: 0.96, tentacleK: 0.88, finSpread: 0.92 };
-  if (m.includes("drift") || m.includes("passive")) return { dy: 0, rot: -5, sc: 1, tentacleK: 1.18, finSpread: 1.12 };
-  if (m.includes("jet") || m.includes("escape")) return { dy: -6, rot: 3, sc: 1.03, tentacleK: 1.25, finSpread: 1.08 };
-  if (m.includes("cryptic") || m.includes("camou")) return { dy: 4, rot: 0, sc: 0.99, tentacleK: 0.88, finSpread: 0.9 };
-  if (m.includes("forag") || m.includes("benthic f")) return { dy: 6, rot: 4, sc: 1, tentacleK: 1, finSpread: 1.04 };
-  if (m.includes("cruis") || m.includes("substrate")) return { dy: 0, rot: 0, sc: 1, tentacleK: 1, finSpread: 1 };
-  if (m.includes("diel") || m.includes("vertical d")) return { dy: 0, rot: 6, sc: 1, tentacleK: 1.06, finSpread: 1.02 };
-  if (m.includes("rheo") || m.includes("station") || m.includes("keeping")) return { dy: 0, rot: 0, sc: 0.99, tentacleK: 0.92, finSpread: 0.95 };
-  if (m.includes("plankton")) return { dy: -2, rot: -3, sc: 1.01, tentacleK: 1.1, finSpread: 1.06 };
-  return { dy: 0, rot: 0, sc: 1, tentacleK: 1, finSpread: 1 };
-}
-
-function computeVisualTraits(dna: Dna, mint: string, L: number): VisualTraits {
-  const pressure = Math.floor(num(dna, "Pressure Class", 5, 1, 10));
-  const mood = typeof dna.Mood === "string" ? dna.Mood : "Cruising";
-  const vs = typeof dna["Variant Seed"] === "number" ? dna["Variant Seed"] : hash32(mint) % 1_000_000;
-  return { pressure, L, mood, variantSeed: vs, moodT: moodToLayout(mood) };
 }
 
 /** Dermal mottling — density from Variant Seed + Pressure (camouflage load). */
@@ -154,26 +80,27 @@ function biomeAccents(biome: string, p: Palette, mint: string): string {
  * Anime-3D / toon-shaded benthic eye: crisp rim, L-driven iris glow, multi catchlights
  * (game-char shading; still zoological pupil shapes).
  */
-function anime3dEye(x: number, y: number, r: number, mint: string, isRight: number, p: Palette, L: number): string {
+function anime3dEye(x: number, y: number, r: number, mint: string, isRight: number, p: Palette, L: number, eyeScale = 1): string {
+  const r0 = r * eyeScale;
   const wob = (rnd(mint, `e${isRight}`, 5) - 2) * 0.3;
   const cx = x + wob;
   const cy = y;
   const verticalSlit = rnd(mint, "pupi", 2) === 0;
-  const pupW = verticalSlit ? r * 0.14 : r * 0.26;
-  const pupH = verticalSlit ? r * 0.4 : r * 0.26;
+  const pupW = verticalSlit ? r0 * 0.14 : r0 * 0.26;
+  const pupH = verticalSlit ? r0 * 0.4 : r0 * 0.26;
   const irGlow = 0.45 + (L / 25) * 0.4;
-  const topLid = -r * 0.92;
+  const topLid = -r0 * 0.92;
   return `<g transform="translate(${cx},${cy})">
-<ellipse rx="${r * 1.12}" ry="${r * 1.02}" fill="#0a0b10" fill-opacity="0.35" transform="translate(1,2)"/>
-<ellipse rx="${r * 1.08}" ry="${r * 0.98}" fill="#0e1522" stroke="#1a1f2e" stroke-width="1.5"/>
-<path d="M ${-r} ${topLid * 0.2} Q 0 ${topLid} ${r} ${topLid * 0.2}" fill="none" stroke="#02060a" stroke-width="1.1" stroke-linecap="round" opacity="0.45"/>
-<ellipse rx="${r * 0.86}" ry="${r * 0.78}" fill="url(#irisGrad)" fill-opacity="${irGlow}"/>
-<ellipse rx="${pupW * 0.3}" ry="${pupH * 0.3}" cx="${-r * 0.1}" cy="${-r * 0.08}" fill="#ffffff" fill-opacity="0.65"/>
+<ellipse rx="${r0 * 1.12}" ry="${r0 * 1.02}" fill="#0a0b10" fill-opacity="0.35" transform="translate(1,2)"/>
+<ellipse rx="${r0 * 1.08}" ry="${r0 * 0.98}" fill="#0e1522" stroke="#1a1f2e" stroke-width="1.65"/>
+<path d="M ${-r0} ${topLid * 0.2} Q 0 ${topLid} ${r0} ${topLid * 0.2}" fill="none" stroke="#02060a" stroke-width="1.1" stroke-linecap="round" opacity="0.45"/>
+<ellipse rx="${r0 * 0.86}" ry="${r0 * 0.78}" fill="url(#irisGrad)" fill-opacity="${irGlow}"/>
+<ellipse rx="${pupW * 0.3}" ry="${pupH * 0.3}" cx="${-r0 * 0.1}" cy="${-r0 * 0.08}" fill="#ffffff" fill-opacity="0.65"/>
 <ellipse rx="${pupW}" ry="${pupH}" fill="#030308"/>
-<circle cx="${-r * 0.3}" cy="${-r * 0.25}" r="${r * 0.2}" fill="#ffffff" fill-opacity="0.6"/>
-<circle cx="${-r * 0.1}" cy="${-r * 0.1}" r="${r * 0.1}" fill="#ffffff" fill-opacity="0.85"/>
-<circle cx="${r * 0.15}" cy="${-r * 0.2}" r="${r * 0.04}" fill="#ffffff" fill-opacity="0.45"/>
-<ellipse rx="${r * 1.1}" ry="${r * 1.0}" fill="none" stroke="url(#rimEye)" stroke-width="0.5" opacity="0.75"/>
+<circle cx="${-r0 * 0.3}" cy="${-r0 * 0.25}" r="${r0 * 0.2}" fill="#ffffff" fill-opacity="0.6"/>
+<circle cx="${-r0 * 0.1}" cy="${-r0 * 0.1}" r="${r0 * 0.1}" fill="#ffffff" fill-opacity="0.85"/>
+<circle cx="${r0 * 0.15}" cy="${-r0 * 0.2}" r="${r0 * 0.04}" fill="#ffffff" fill-opacity="0.45"/>
+<ellipse rx="${r0 * 1.1}" ry="${r0 * 1.0}" fill="none" stroke="url(#rimEye)" stroke-width="0.6" opacity="0.8"/>
 </g>`;
 }
 
@@ -188,7 +115,7 @@ function lanternGulper(p: Palette, mint: string, t: VisualTraits): string {
 <g>
 <path d="${body}" fill="#020408" fill-opacity="0.2" transform="translate(2,3)"/>
 <path d="${body}" fill="url(#celDerm)" stroke="#141b26" stroke-width="1.35" stroke-linejoin="round"/>
-<path d="${body}" fill="none" stroke="url(#animeRimLine)" stroke-width="0.65" stroke-linejoin="round"/>
+<path d="${body}" fill="none" stroke="url(#animeRimLine)" stroke-width="0.82" stroke-linejoin="round"/>
 <ellipse cx="215" cy="150" rx="48" ry="24" fill="url(#keySpec)" fill-opacity="0.2" transform="rotate(-10 215 150)"/>
 ${dermalMottle(p, mint, t, "lg")}
 <path d="${belly}" fill="url(#ventralShade)" fill-opacity="0.55" stroke="none"/>
@@ -216,8 +143,8 @@ ${dermalMottle(p, mint, t, "lg")}
 <circle cx="325" cy="210" r="0.8" fill="${p.shadow}" fill-opacity="0.35"/>
 <circle cx="290" cy="220" r="0.7" fill="${p.shadow}" fill-opacity="0.3"/>
 </g>
-${anime3dEye(218, 188, 12, mint, 0, p, t.L)}
-${anime3dEye(300, 188, 12, mint, 1, p, t.L)}`;
+${anime3dEye(218, 188, 12, mint, 0, p, t.L, t.eyeScale)}
+${anime3dEye(300, 188, 12, mint, 1, p, t.L, t.eyeScale)}`;
 }
 
 /** Fusiform midwater fish: keeled side, forked caudal, clear dorsal & anal, lateral line. */
@@ -229,7 +156,7 @@ function glassfinDrifter(p: Palette, mint: string, t: VisualTraits): string {
 <g>
 <path d="${trunk}" fill="#030508" fill-opacity="0.18" transform="translate(2,2)"/>
 <path d="${trunk}" fill="url(#celDerm)" fill-opacity="0.88" stroke="#182230" stroke-width="1" stroke-linejoin="round"/>
-<path d="${trunk}" fill="none" stroke="url(#animeRimLine)" stroke-width="0.6"/>
+<path d="${trunk}" fill="none" stroke="url(#animeRimLine)" stroke-width="0.78"/>
 <ellipse cx="200" cy="170" rx="60" ry="30" fill="url(#keySpec)" fill-opacity="0.16" transform="rotate(-6 200 170)"/>
 ${dermalMottle(p, mint, t, "gf")}
 <g transform="translate(400, 200) scale(${fs} 1) translate(-400,-200)">
@@ -244,8 +171,8 @@ ${dermalMottle(p, mint, t, "gf")}
 <ellipse cx="300" cy="201" rx="1.5" ry="0.8" fill="#02060a" fill-opacity="0.1"/>
 <ellipse cx="250" cy="200" rx="1.2" ry="0.6" fill="#f0f9ff" fill-opacity="0.06"/>
 </g>
-${anime3dEye(198, 195, 8, mint, 0, p, t.L)}
-${anime3dEye(255, 195, 8, mint, 1, p, t.L)}`;
+${anime3dEye(198, 195, 8, mint, 0, p, t.L, t.eyeScale)}
+${anime3dEye(255, 195, 8, mint, 1, p, t.L, t.eyeScale)}`;
 }
 
 /** Stomatopod: rostrum, maxillipeds, tergites, raptorial dactyl. */
@@ -276,8 +203,8 @@ ${terg.join("")}
 <circle cx="155" cy="195" r="2" fill="${p.biolume}" filter="url(#bloom)"/>
 <circle cx="300" cy="200" r="1.5" fill="${p.biolume}" filter="url(#bloom)"/>
 </g>
-${anime3dEye(100, 162, 8, mint, 0, p, t.L)}
-${anime3dEye(150, 162, 8, mint, 1, p, t.L)}`;
+${anime3dEye(100, 162, 8, mint, 0, p, t.L, t.eyeScale)}
+${anime3dEye(150, 162, 8, mint, 1, p, t.L, t.eyeScale)}`;
 }
 
 function armSuckers(mint: string, p: Palette): string {
@@ -334,8 +261,8 @@ ${dermalMottle(p, mint, t, "oct")}
 ${tent.join("")}
 ${armSuckers(mint, p)}
 </g>
-${anime3dEye(228, 186, 12, mint, 0, p, t.L)}
-${anime3dEye(280, 186, 12, mint, 1, p, t.L)}`;
+${anime3dEye(228, 186, 12, mint, 0, p, t.L, t.eyeScale)}
+${anime3dEye(280, 186, 12, mint, 1, p, t.L, t.eyeScale)}`;
 }
 
 /** Eel: myomeres (chevrons), dorsal/ anal ridge, lateral line, heterocercal tail. */
@@ -364,7 +291,7 @@ function spineEel(p: Palette, mint: string, nSpine: number, t: VisualTraits): st
 <g>
 <path d="${path}" fill="none" stroke="#040810" stroke-width="${girth + 10}" stroke-linecap="round" opacity="0.45"/>
 <path d="${path}" fill="none" stroke="url(#eelCel)" stroke-width="${girth}" stroke-linecap="round"/>
-<path d="${path}" fill="none" stroke="url(#animeRimLine)" stroke-width="0.9" stroke-linecap="round" opacity="0.6"/>
+<path d="${path}" fill="none" stroke="url(#animeRimLine)" stroke-width="1.05" stroke-linecap="round" opacity="0.65"/>
 <path d="${path}" fill="none" stroke="${p.skinHi}" stroke-width="7" stroke-linecap="round" opacity="0.35"/>
 ${dermalMottle(p, mint, t, "eel")}
 <path d="M 400 200 Q 450 200 500 200 L 500 150 Q 450 150 410 200" fill="url(#caudal)" fill-opacity="0.4" stroke="${p.shadow}"/>
@@ -373,10 +300,10 @@ ${dermalMottle(p, mint, t, "eel")}
 ${myom.join("")}
 ${sp.join("")}
 <g transform="translate(95, 165)">
-${anime3dEye(0, 0, 9, mint, 0, p, t.L)}
+${anime3dEye(0, 0, 9, mint, 0, p, t.L, t.eyeScale)}
 </g>
 <g transform="translate(110, 168)">
-${anime3dEye(0, 0, 9, mint, 1, p, t.L)}
+${anime3dEye(0, 0, 9, mint, 1, p, t.L, t.eyeScale)}
 </g>`;
 }
 
@@ -401,8 +328,8 @@ ${dermalMottle(p, mint, t, "hermit")}
 <circle cx="260" cy="140" r="2" fill="${p.biolume}" filter="url(#bloom)"/>
 <circle cx="256" cy="195" r="2.5" fill="#1a0f0a" fill-opacity="0.2"/>
 </g>
-${anime3dEye(232, 168, 8, mint, 0, p, t.L)}
-${anime3dEye(268, 168, 8, mint, 1, p, t.L)}`;
+${anime3dEye(232, 168, 8, mint, 0, p, t.L, t.eyeScale)}
+${anime3dEye(268, 168, 8, mint, 1, p, t.L, t.eyeScale)}`;
 }
 
 /** Tegula-like: spiral sutures, opercular scar, muscled foot. */
@@ -422,8 +349,8 @@ ${dermalMottle(p, mint, t, "snail")}
 </g>
 </g>
 <g transform="translate(0, -8)">
-${anime3dEye(192, 188, 6, mint, 0, p, t.L)}
-${anime3dEye(208, 188, 6, mint, 1, p, t.L)}
+${anime3dEye(192, 188, 6, mint, 0, p, t.L, t.eyeScale)}
+${anime3dEye(208, 188, 6, mint, 1, p, t.L, t.eyeScale)}
 </g>`;
 }
 
@@ -447,8 +374,8 @@ ${dermalMottle(p, mint, t, "ray")}
 <path d="M 256 90 Q 300 100 256 100 Q 200 100 256 90" fill="url(#noseB)" fill-opacity="0.2"/>
 <circle cx="256" cy="200" r="0.5" fill="#000" fill-opacity="0.15"/>
 </g>
-${anime3dEye(200, 168, 10, mint, 0, p, t.L)}
-${anime3dEye(300, 168, 10, mint, 1, p, t.L)}`;
+${anime3dEye(200, 168, 10, mint, 0, p, t.L, t.eyeScale)}
+${anime3dEye(300, 168, 10, mint, 1, p, t.L, t.eyeScale)}`;
 }
 
 function bodyFor(a: number, p: Palette, mint: string, t: VisualTraits): string {
@@ -476,24 +403,18 @@ function bodyFor(a: number, p: Palette, mint: string, t: VisualTraits): string {
 }
 
 /**
- * Renders a deterministic benthic / midwater “specimen”: toon (cel) shading,
- * Luminosity- and mood-driven pose, dermal mottling from Variant Seed + Pressure,
- * and biome-appropriate backdrops.
+ * Renders a deterministic trench “dex” creature: cel / toon shading (Pokémon-card style),
+ * luminosity- and mood-driven pose, variant-seed eye scale, mottling from Variant Seed + Pressure,
+ * and biome backdrops.
  */
 export function buildCreaturePreviewSvg(dna: Dna, name: string, mint: string): string {
   const species = typeof dna.Species === "string" ? dna.Species : "Trench creature";
   const biome = typeof dna.Biome === "string" ? dna.Biome : "Abyssal Plain";
   const mood = typeof dna.Mood === "string" ? dna.Mood : "";
-  const lr = dna["Luminosity"];
-  const L =
-    typeof lr === "number" && !Number.isNaN(lr)
-      ? lr > 1.01
-        ? Math.min(10, lr)
-        : lr * 10
-      : 5;
-  const p = biomePalette(biome, mint);
-  const a = archetype(species, mint);
-  const t = computeVisualTraits(dna, mint, L);
+  const L = getLuminosityL(dna);
+  const p = getBiomePalette(biome, mint);
+  const a = getSpeciesArchetypeIndex(species, mint);
+  const t = getArtVisualTraits(dna, mint, L);
   const body = bodyFor(a, p, mint, t);
 
   const g2 = 2.2 + L * 0.45;

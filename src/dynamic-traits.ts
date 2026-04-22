@@ -2,22 +2,22 @@ import { hash32 } from "./collection-traits";
 import type { Dna, DynamicState } from "./nft-metadata";
 import { computeClockTraits } from "./time-traits";
 
-const FORAGING = ["Benthic scraper", "Pelagic drift", "Scavenger circuit", "Ambush idle"] as const;
-const SOCIAL = ["Solo", "Pair-bonded", "Loose school", "Nomad"] as const;
+const FORAGING = ["Trench scraper", "Drift chaser", "Scrap circuit", "Hide-and-strike idling"] as const;
+const SOCIAL = ["Lone rambler", "Battle buddy pair", "Shoal straggler", "Roaming nomad"] as const;
 const SEASON = [
-  "Verdant upwelling",
-  "Storm surge season",
-  "Still water window",
-  "Deep mixing arc",
+  "Upwelling bloom",
+  "Storm surge",
+  "Glass-calm hush",
+  "Deep mixing",
 ] as const;
 const PHOTIC = [
-  "Sunlit column",
-  "Twilight fringe",
-  "Midnight zone",
-  "Aphotic trench",
+  "Sunbeams (surface rules)",
+  "Twilight line",
+  "Abyss night",
+  "Aphotic unknown",
 ] as const;
-const SOLUNAR = ["Peak window", "Rising edge", "Quiet interval", "Surge overlap"] as const;
-const PULSE = ["Whisper", "Steady", "Thrum", "Surge"] as const;
+const SOLUNAR = ["Peak power", "Rising skirmish", "Quiet lull", "Tide crash"] as const;
+const PULSE = ["Faint pulse", "Steady beat", "Core thrum", "Surge burst"] as const;
 
 function dayOfYearUtc(d: Date): number {
   const start = Date.UTC(d.getUTCFullYear(), 0, 0);

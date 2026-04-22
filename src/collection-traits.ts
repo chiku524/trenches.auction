@@ -11,26 +11,45 @@ export const BIOMES = [
   "Phantom Canyon",
 ] as const;
 
+/**
+ * Trench “dex” line — Pokémon-style portmanteau names, one per 3D/SVG archetype (order is stable).
+ * Legacy on-chain values are mapped in `LEGACY_SPECIES_INDEX` so previews do not change for older mints.
+ */
 export const SPECIES = [
-  "Lantern Gulper",
-  "Glassfin Drifter",
-  "Rust Mantis Shrimp",
-  "Inkcloud Octoid",
-  "Spineback Eel",
-  "Coral Hermit",
-  "Pressure Snail",
-  "Echo Ray",
+  "Gulplume",
+  "Driftglass",
+  "Rustrant",
+  "Inktopus",
+  "Spineel",
+  "Shellurker",
+  "Abyssnail",
+  "Echoray",
 ] as const;
 
+/** Earlier mints may list these; index must match `SPECIES` archetype order. */
+export const LEGACY_SPECIES_INDEX: Readonly<Record<string, number>> = {
+  "Lantern Gulper": 0,
+  "Glassfin Drifter": 1,
+  "Rust Mantis Shrimp": 2,
+  "Inkcloud Octoid": 3,
+  "Spineback Eel": 4,
+  "Coral Hermit": 5,
+  "Pressure Snail": 6,
+  "Echo Ray": 7,
+};
+
+/**
+ * Stance / mood. Each entry embeds a keyword consumed by `getMoodLayout` (cruise, forage, jet, etc.).
+ */
 const MOODS = [
-  "Substrate cruise",
-  "Benthic forage",
-  "Escape jet",
-  "Camouflage (cryptic)",
-  "Lie-in-wait (ambush)",
-  "Passive drift",
-  "Diel vertical migration",
-  "Rheotaxis (station-holding)",
+  "Abyss cruise (substrate prowl)",
+  "Trench forage (benthic comb)",
+  "Jet-burst escape (sprint away)",
+  "Cryptic cloak (mimic shroud)",
+  "Ambush snap (lie-in-wait pounce)",
+  "Drift float (passive meander)",
+  "Diel climb (vertical migration)",
+  "Rheo-station (vent anchor)",
 ] as const;
 
 /** Deterministic FNV-1a-ish 32-bit hash for reproducible collection rolls. */

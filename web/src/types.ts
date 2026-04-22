@@ -1,1 +1,1 @@
-export type Dna = Record<string, string | number | boolean>;
+export type { Dna } from "@trenches/cnft-shared";
