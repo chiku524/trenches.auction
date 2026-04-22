@@ -1,6 +1,6 @@
 import type { Dna } from "./nft-metadata";
 
-const BIOMES = [
+export const BIOMES = [
   "Abyssal Plain",
   "Hydrothermal Fan",
   "Kelptangle Forest",
@@ -11,7 +11,7 @@ const BIOMES = [
   "Phantom Canyon",
 ] as const;
 
-const SPECIES = [
+export const SPECIES = [
   "Lantern Gulper",
   "Glassfin Drifter",
   "Rust Mantis Shrimp",
@@ -22,7 +22,7 @@ const SPECIES = [
   "Echo Ray",
 ] as const;
 
-const MOODS = ["Hungry", "Curious", "Migrating", "Brooding", "Hunting", "Dreaming"] as const;
+const MOODS = ["Cruising", "Foraging", "Jetting", "Cryptic", "Ambush", "Drifting", "Diel migration", "Station-keeping"] as const;
 
 /** Deterministic FNV-1a-ish 32-bit hash for reproducible collection rolls. */
 export function hash32(input: string): number {
