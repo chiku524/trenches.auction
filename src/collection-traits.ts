@@ -43,7 +43,7 @@ export function hash32(input: string): number {
   return h >>> 0;
 }
 
-/** Immutable DNA for metadata attributes; clock/time traits stay dynamic in metadata builder. */
+/** Immutable DNA for Metaplex attributes. Live / time traits are added in `computeLiveMetadataTraits`. */
 export function dnaForAssetId(assetId: string): Dna {
   const h = hash32(assetId);
   const h2 = hash32(`${assetId}:traits`);

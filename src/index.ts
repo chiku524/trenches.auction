@@ -1,8 +1,14 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { computeClockTraits } from "./time-traits";
+import type { AddressLookupTableInput } from "@metaplex-foundation/umi";
+import { computeLiveMetadataTraits } from "./dynamic-traits";
 import { buildMetaplexStyleJson, type Dna, type DynamicState } from "./nft-metadata";
-import { loadMintAuthorityKeypair, serverMintCompressedNft } from "./cnft-server-mint";
+import {
+  loadMintAuthorityKeypair,
+  resolveAddressLookupTableForMinting,
+  serverMintCompressedNft,
+  serverMintCompressedNftChunk,
+} from "./cnft-server-mint";
 import { registerSolanaCnft } from "./token-registry";
 import {
   MINT_CHALLENGE_PREFIX,
@@ -286,7 +292,7 @@ async function buildMetadataForToken(
 
   const dynamic = parseJsonObject(st?.state_json ?? null, {}) as DynamicState;
   const immutable = parseDna(row.immutable_dna);
-  const clock = computeClockTraits();
+  const live = computeLiveMetadataTraits(new Date(), { assetId: row.mint_or_contract, immutable });
   const base = c.env.PUBLIC_BASE_URL.replace(/\/$/, "");
   // R2 upload wins inside this route; else deterministic SVG from DNA.
   const imageUrl = `${base}/v1/cnft/preview/${encodeURIComponent(row.mint_or_contract)}`;
@@ -307,7 +313,7 @@ async function buildMetadataForToken(
     externalUrl: `${base}/v1/viewer/${encodeURIComponent(id)}`,
     immutable,
     dynamic,
-    clock,
+    live,
   });
 }
 
@@ -532,33 +538,70 @@ app.post("/v1/admin/cnft/mint-batch", async (c) => {
   const startNumber = Math.max(1, Number(body.startNumber) || 1);
 
   const royaltyBps = Number.parseInt(c.env.CNFT_ROYALTY_BPS ?? "500", 10);
+  const perTxParsed = Number.parseInt(c.env.CNFT_MINTS_PER_TX ?? "3", 10);
+  const mintsPerTx = Math.min(20, Math.max(1, Number.isFinite(perTxParsed) && perTxParsed > 0 ? perTxParsed : 3));
 
-  const results: Record<string, unknown>[] = [];
+  const toMint: { name: string; symbol: string }[] = [];
   for (let i = 0; i < count; i++) {
     const num = startNumber + i;
-    const name = `${namePrefix} #${num}`;
+    toMint.push({ name: `${namePrefix} #${num}`, symbol });
+  }
+
+  const altStr = c.env.CNFT_ADDRESS_LOOKUP_TABLE?.trim() ?? "";
+  let addressLookup: AddressLookupTableInput | null = null;
+  if (altStr) {
     try {
-      const minted = await serverMintCompressedNft({
+      addressLookup = await resolveAddressLookupTableForMinting({
+        rpcUrl: rpc,
+        mintAuthorityKeypairJson: keypair,
+        addressLookupTableBase58: altStr,
+      });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      return c.json({ error: "invalid_address_lookup_table", detail: formatRpcErrorDetail(msg, 800) }, 400);
+    }
+  }
+
+  const results: Record<string, unknown>[] = [];
+  for (let o = 0; o < toMint.length; o += mintsPerTx) {
+    const chunk = toMint.slice(o, o + mintsPerTx);
+    try {
+      const batch = await serverMintCompressedNftChunk({
         rpcUrl: rpc,
         mintAuthorityKeypairJson: keypair,
         merkleTree: tree,
         recipient,
         publicBaseUrl: c.env.PUBLIC_BASE_URL,
         royaltyBps: Number.isFinite(royaltyBps) ? royaltyBps : 500,
-        name,
-        symbol,
+        items: chunk,
+        addressLookupTable: addressLookup,
       });
-      await registerSolanaCnft(c.env.DB, minted.assetId, name, symbol, dnaForAssetId(minted.assetId));
-      results.push({ ok: true, name, ...minted });
+      for (let j = 0; j < batch.length; j++) {
+        const minted = batch[j]!;
+        const { name, symbol: sym } = chunk[j]!;
+        await registerSolanaCnft(c.env.DB, minted.assetId, name, sym, dnaForAssetId(minted.assetId));
+        results.push({ ok: true, name, ...minted });
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
-      results.push({ ok: false, name, error: formatRpcErrorDetail(msg, 800) });
+      results.push({ ok: false, name: chunk[0]!.name, error: formatRpcErrorDetail(msg, 800) });
       break;
     }
   }
 
   const okCount = results.filter((r) => r.ok === true).length;
-  return c.json({ ok: true, attempted: results.length, minted: okCount, results }, 200);
+  return c.json(
+    {
+      ok: true,
+      attempted: toMint.length,
+      minted: okCount,
+      mintsPerTransaction: mintsPerTx,
+      addressLookupTable: altStr || null,
+      v0WithAddressLookup: Boolean(addressLookup),
+      results,
+    },
+    200
+  );
 });
 
 app.post("/v1/admin/tokens", async (c) => {

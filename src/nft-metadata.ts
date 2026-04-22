@@ -1,9 +1,17 @@
-import type { computeClockTraits } from "./time-traits";
-
 export type Dna = Record<string, string | number | boolean>;
 export type DynamicState = Record<string, unknown>;
 
-type ClockTraits = ReturnType<typeof computeClockTraits>;
+/** Keys in `dynamic_state` that set JSON top-level fields, not attribute rows. */
+const METADATA_ONLY_STATE_KEYS = new Set([
+  "description",
+  "animation_url",
+  "name",
+  "image",
+  "external_url",
+]);
+
+/** Per-request environment / clock layer (recomputed on every metadata fetch). */
+export type LiveMetadataTraits = Record<string, string | number>;
 
 export function buildMetaplexStyleJson(input: {
   name: string;
@@ -12,8 +20,10 @@ export function buildMetaplexStyleJson(input: {
   animationUrl?: string;
   externalUrl?: string;
   immutable: Dna;
+  /** Stored in D1; reserved keys are omitted from attributes (see source). */
   dynamic: DynamicState;
-  clock: ClockTraits;
+  /** Not stored: tide, photic band, sim depth, etc. */
+  live: LiveMetadataTraits;
 }): Record<string, unknown> {
   const attributes: { trait_type: string; value: string | number }[] = [];
 
@@ -21,6 +31,7 @@ export function buildMetaplexStyleJson(input: {
     attributes.push({ trait_type: k, value: typeof v === "string" || typeof v === "number" ? v : String(v) });
   }
   for (const [k, v] of Object.entries(input.dynamic)) {
+    if (METADATA_ONLY_STATE_KEYS.has(k)) continue;
     if (v === undefined || v === null) continue;
     attributes.push({
       trait_type: k,
@@ -28,11 +39,9 @@ export function buildMetaplexStyleJson(input: {
     });
   }
 
-  attributes.push(
-    { trait_type: "Lunar Phase", value: input.clock.lunar_phase },
-    { trait_type: "Time of Day", value: input.clock.time_of_day },
-    { trait_type: "Clock (UTC)", value: input.clock.clock_iso }
-  );
+  for (const [k, v] of Object.entries(input.live)) {
+    attributes.push({ trait_type: k, value: v });
+  }
 
   return {
     name: input.name,

@@ -1,3 +1,5 @@
+import { dnaForAssetId } from "./collection-traits";
+import { defaultStoredDynamicState } from "./dynamic-traits";
 import type { Dna } from "./nft-metadata";
 
 /** Register a Solana compressed asset so `/v1/metadata/solana/:mint` resolves from D1. */
@@ -10,8 +12,9 @@ export async function registerSolanaCnft(
 ): Promise<{ id: string }> {
   const id = `solana:${assetId.trim()}`;
   const mint = assetId.trim();
-  const dna = JSON.stringify(immutableDna ?? { "Asset Type": "Compressed" });
-  const state = JSON.stringify({});
+  const dnaObj: Dna = immutableDna ?? dnaForAssetId(assetId);
+  const dna = JSON.stringify(dnaObj);
+  const state = JSON.stringify(defaultStoredDynamicState(assetId, dnaObj));
 
   await db
     .prepare(
