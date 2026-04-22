@@ -22,7 +22,16 @@ export const SPECIES = [
   "Echo Ray",
 ] as const;
 
-const MOODS = ["Cruising", "Foraging", "Jetting", "Cryptic", "Ambush", "Drifting", "Diel migration", "Station-keeping"] as const;
+const MOODS = [
+  "Substrate cruise",
+  "Benthic forage",
+  "Escape jet",
+  "Camouflage (cryptic)",
+  "Lie-in-wait (ambush)",
+  "Passive drift",
+  "Diel vertical migration",
+  "Rheotaxis (station-holding)",
+] as const;
 
 /** Deterministic FNV-1a-ish 32-bit hash for reproducible collection rolls. */
 export function hash32(input: string): number {
