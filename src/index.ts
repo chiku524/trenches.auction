@@ -297,7 +297,9 @@ async function buildMetadataForToken(
   // R2 upload wins inside this route; else deterministic SVG from DNA.
   const imageUrl = `${base}/v1/cnft/preview/${encodeURIComponent(row.mint_or_contract)}`;
   const animationUrl =
-    typeof dynamic.animation_url === "string" ? String(dynamic.animation_url) : `${base}/v1/viewer/${encodeURIComponent(id)}`;
+    typeof dynamic.animation_url === "string"
+      ? String(dynamic.animation_url)
+      : `${base}/viewer?ref=${encodeURIComponent(id)}`;
 
   const name = row.name ?? "Trench Creature";
   const description =
@@ -310,7 +312,7 @@ async function buildMetadataForToken(
     description,
     imageUrl,
     animationUrl,
-    externalUrl: `${base}/v1/viewer/${encodeURIComponent(id)}`,
+    externalUrl: `${base}/viewer?ref=${encodeURIComponent(id)}`,
     immutable,
     dynamic,
     live,
@@ -357,37 +359,12 @@ app.get("/v1/asset/:tokenRef/image.png", async (c) => {
   return new Response(obj.body, { headers });
 });
 
-app.get("/v1/viewer/:tokenRef", async (c) => {
+app.get("/v1/viewer/:tokenRef", (c) => {
   const tokenRef = decodeURIComponent(c.req.param("tokenRef"));
   const base = c.env.PUBLIC_BASE_URL.replace(/\/$/, "");
-  const html = `<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Trenches — viewer</title>
-  <style>
-    body { font-family: system-ui, sans-serif; margin: 2rem; background: #020617; color: #e2e8f0; }
-    a { color: #38bdf8; }
-    code { background: #0f172a; padding: 0.2rem 0.4rem; border-radius: 4px; }
-  </style>
-</head>
-<body>
-  <h1>Trench creature</h1>
-  <p>Token ref: <code>${escapeHtml(tokenRef)}</code></p>
-  <p>Ship your Three.js or Babylon viewer here; load GLB from R2 and fetch JSON from <code>/v1/metadata/...</code> after mint registration.</p>
-</body>
-</html>`;
-  return c.text(html, 200, { "Content-Type": "text/html; charset=utf-8" });
+  const loc = `${base}/viewer?ref=${encodeURIComponent(tokenRef)}`;
+  return c.redirect(loc, 302);
 });
-
-function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
-}
 
 /** Public Solana RPC and some free tiers block Cloudflare Workers egress IPs (HTTP 403). */
 function formatRpcErrorDetail(raw: string, maxLen = 2000): string {

@@ -1,10 +1,16 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from "react";
 import { ConnectionProvider, WalletProvider, useWallet } from "@solana/wallet-adapter-react";
 import { WalletModalProvider, WalletMultiButton } from "@solana/wallet-adapter-react-ui";
 import { PhantomWalletAdapter } from "@solana/wallet-adapter-phantom";
 import { clusterApiUrl } from "@solana/web3.js";
 import bs58 from "bs58";
+import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Link } from "react-router-dom";
 import "@solana/wallet-adapter-react-ui/styles.css";
+const ViewerPage = lazy(async () => {
+  const m = await import("./ViewerPage");
+  return { default: m.ViewerPage };
+});
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? "";
 
@@ -523,6 +529,18 @@ function GalleryPanel({ refreshKey }: { refreshKey: number }) {
               <div className="meta">
                 <strong>{it.name ?? "—"}</strong>
                 <code>{it.id.slice(0, 8)}…</code>
+                {it.id ? (
+                  <div style={{ marginTop: 6 }}>
+                    <Link
+                      to={`/viewer?ref=${encodeURIComponent(it.id)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{ color: "#38bdf8", fontSize: 12 }}
+                    >
+                      3D viewer
+                    </Link>
+                  </div>
+                ) : null}
               </div>
             </div>
           ))}
@@ -568,8 +586,20 @@ function AppInner() {
 
 export function App() {
   return (
-    <WalletShell>
-      <AppInner />
-    </WalletShell>
+    <BrowserRouter>
+      <WalletShell>
+        <Routes>
+          <Route
+            path="/viewer"
+            element={
+              <Suspense fallback={<p style={{ padding: "1.5rem", color: "#94a3b8" }}>Loading viewer…</p>}>
+                <ViewerPage />
+              </Suspense>
+            }
+          />
+          <Route path="/" element={<AppInner />} />
+        </Routes>
+      </WalletShell>
+    </BrowserRouter>
   );
 }
