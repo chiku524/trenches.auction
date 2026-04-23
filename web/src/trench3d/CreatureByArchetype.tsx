@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { CatmullRomCurve3, TubeGeometry, Vector3 } from "three";
+import { CatmullRomCurve3, LatheGeometry, TorusGeometry, TubeGeometry, Vector2, Vector3 } from "three";
 import type { CnftArtPalette, CnftArtVisualTraits } from "@trenches/cnft-shared";
 import { hash32 } from "@trenches/cnft-shared";
 import { animeGlassProps, animeSkinPhysicalProps } from "./animePbr";
@@ -374,105 +374,261 @@ function SpineEel({ p, t, nSpine, mint }: { p: CnftArtPalette; t: CnftArtVisualT
   );
 }
 
+/** Dextral turbinate shell: lathe profile (radius, height), revolved. */
+function hermitShellGeometry() {
+  const profile = [
+    new Vector2(0.02, 0.0),
+    new Vector2(0.1, 0.06),
+    new Vector2(0.2, 0.16),
+    new Vector2(0.32, 0.32),
+    new Vector2(0.36, 0.48),
+    new Vector2(0.24, 0.58),
+    new Vector2(0.1, 0.54),
+    new Vector2(0.04, 0.44),
+  ];
+  return new LatheGeometry(profile, 40);
+}
+
 function CoralHermit({ p, t }: { p: CnftArtPalette; t: CnftArtVisualTraits }) {
   const shell = useRef<THREE.Group>(null);
   const legs = useRef<THREE.Group>(null);
+  const clawL = useRef<THREE.Group>(null);
+  const clawR = useRef<THREE.Group>(null);
+  const shellGeo = useMemo(() => hermitShellGeometry(), []);
+  const lipGeo = useMemo(() => new TorusGeometry(0.2, 0.018, 8, 28, Math.PI * 1.25), []);
+  useEffect(
+    () => () => {
+      shellGeo.dispose();
+      lipGeo.dispose();
+    },
+    [shellGeo, lipGeo]
+  );
+  const shellColor = new THREE.Color(p.shadow).lerp(new THREE.Color("#6b4a2a"), 0.45);
   useFrame((state) => {
     const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
     if (shell.current) {
-      shell.current.rotation.z = Math.sin(cl * 0.45) * 0.06;
+      shell.current.rotation.z = Math.sin(cl * 0.45) * 0.05;
+      shell.current.rotation.x = 0.12 + Math.sin(cl * 0.28) * 0.04;
     }
-    if (legs.current) {
-      legs.current.rotation.x = Math.sin(cl * 1.2) * 0.05 * t.finFlap;
-    }
+    if (legs.current) legs.current.rotation.x = Math.sin(cl * 1.2) * 0.06 * t.finFlap;
+    const f = t.finFlap;
+    if (clawL.current) clawL.current.rotation.z = 0.35 + Math.sin(cl * 1.7) * 0.2 * f;
+    if (clawR.current) clawR.current.rotation.z = -0.25 + Math.sin(cl * 1.7 + 0.5) * 0.12 * f;
   });
   return (
     <group>
-      <group ref={shell} position={[0.15, 0, 0.05]} scale={[0.5, 0.7, 0.55]}>
-        <mesh>
-          <sphereGeometry args={[0.5, 24, 20]} />
+      <group
+        ref={shell}
+        position={[0.22, 0.1, 0.02]}
+        rotation={[0.12, 0.55, 0.08]}
+        scale={[0.85, 0.85, 0.88]}
+      >
+        <mesh geometry={shellGeo} castShadow>
           <meshPhysicalMaterial
-            {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.85, metalness: 0.1, roughness: 0.5 })}
+            color={shellColor}
+            roughness={0.62}
+            metalness={0.06}
+            clearcoat={0.22}
+            clearcoatRoughness={0.45}
+            emissive={new THREE.Color(p.shadow)}
+            emissiveIntensity={0.04}
+            envMapIntensity={0.6}
+          />
+        </mesh>
+        <mesh geometry={lipGeo} rotation={[Math.PI / 2, 0, 0.6]} position={[-0.02, 0.48, 0.08]}>
+          <meshPhysicalMaterial
+            color={shellColor}
+            roughness={0.55}
+            metalness={0.05}
+            emissive={new THREE.Color(0x1a1008)}
+            emissiveIntensity={0.02}
           />
         </mesh>
       </group>
-      <mesh position={[-0.1, 0, 0.12]}>
-        <boxGeometry args={[0.2, 0.15, 0.18]} />
-        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L)} />
+      <mesh position={[-0.1, -0.02, 0.14]} rotation={[0.1, 0.35, 0]} castShadow>
+        <capsuleGeometry args={[0.1, 0.14, 5, 10]} />
+        <meshPhysicalMaterial
+          {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.9, roughness: 0.45, iridescent: true })}
+        />
       </mesh>
-      <group ref={legs}>
-        {[
-          [0, -0.12, 0.25],
-          [-0.1, -0.12, 0.2],
-          [0.1, -0.12, 0.2],
-          [0, -0.12, 0.1],
-        ].map((pos, i) => (
+      <mesh position={[-0.05, -0.1, 0.08]} rotation={[0.25, 0, 0.1]}>
+        <capsuleGeometry args={[0.07, 0.1, 4, 8]} />
+        <meshPhysicalMaterial
+          color={p.skin}
+          emissive={new THREE.Color(p.biolume)}
+          emissiveIntensity={0.03 + t.L * 0.02}
+          roughness={0.5}
+          metalness={0.1}
+        />
+      </mesh>
+      <group ref={clawL} position={[-0.32, 0, 0.18]} rotation={[0.2, 0, 0.5]}>
+        <mesh>
+          <boxGeometry args={[0.14, 0.05, 0.16]} />
+          <meshPhysicalMaterial
+            color={p.shadow}
+            emissive={new THREE.Color(p.biolume)}
+            emissiveIntensity={0.06 + t.L * 0.03}
+            metalness={0.28}
+            roughness={0.42}
+            clearcoat={0.2}
+          />
+        </mesh>
+        <mesh position={[-0.1, 0, 0.04]} rotation={[0, 0, 0.4]}>
+          <boxGeometry args={[0.1, 0.035, 0.12]} />
+          <meshPhysicalMaterial color={p.shadow} metalness={0.25} roughness={0.45} />
+        </mesh>
+      </group>
+      <group ref={clawR} position={[-0.18, -0.06, 0.1]} rotation={[0.15, 0, -0.3]}>
+        <mesh>
+          <boxGeometry args={[0.09, 0.04, 0.11]} />
+          <meshPhysicalMaterial
+            color={p.shadow}
+            emissive={new THREE.Color(p.biolume)}
+            emissiveIntensity={0.05 + t.L * 0.025}
+            metalness={0.25}
+            roughness={0.45}
+          />
+        </mesh>
+      </group>
+      <group ref={legs} position={[-0.06, -0.14, 0.1]}>
+        {(
+          [
+            [0, 0, 0.2, 0.15],
+            [-0.1, 0, 0.1, 0.35],
+            [0.1, 0, 0.1, -0.25],
+            [0, 0, -0.1, 0.05],
+          ] as const
+        ).map(([x, y, z, ry], i) => (
           <mesh
             // eslint-disable-next-line react/no-array-index-key
             key={i}
-            position={pos as [number, number, number]}
-            rotation={[0.4, 0, 0]}
+            position={[x, y, z] as [number, number, number]}
+            rotation={[0.65, ry, 0.15 * (i - 1.5)]}
           >
-            <cylinderGeometry args={[0.04, 0.03, 0.2, 6]} />
-            <meshPhysicalMaterial color={p.shadow} metalness={0.15} roughness={0.55} />
+            <cylinderGeometry args={[0.03, 0.022, 0.2, 6]} />
+            <meshPhysicalMaterial color={p.shadow} metalness={0.12} roughness={0.58} />
           </mesh>
         ))}
       </group>
-      <mesh position={[-0.12, 0.15, 0.1]}>
-        <cylinderGeometry args={[0.015, 0.015, 0.1, 5]} />
+      <mesh position={[-0.1, 0.03, 0.16]}>
+        <cylinderGeometry args={[0.012, 0.01, 0.14, 5]} />
         <meshStandardMaterial color={p.shadow} />
       </mesh>
-      <mesh position={[-0.12, 0.22, 0.1]}>
-        <sphereGeometry args={[0.04, 8, 8]} />
-        <meshPhysicalMaterial
-          emissive={p.biolume}
-          emissiveIntensity={0.2 + t.L * 0.05}
-          color={p.shadow}
-        />
-      </mesh>
-      <mesh position={[0.12, 0.15, 0.1]}>
-        <cylinderGeometry args={[0.015, 0.015, 0.1, 5]} />
+      <mesh position={[-0.04, 0.03, 0.16]}>
+        <cylinderGeometry args={[0.012, 0.01, 0.14, 5]} />
         <meshStandardMaterial color={p.shadow} />
       </mesh>
-      <mesh position={[0.12, 0.22, 0.1]}>
-        <sphereGeometry args={[0.04, 8, 8]} />
-        <meshPhysicalMaterial
-          emissive={p.biolume}
-          emissiveIntensity={0.2 + t.L * 0.05}
-          color={p.shadow}
-        />
-      </mesh>
-      <AnimeEyes p={p} L={t.L} x={-0.05} y={0.04} z={0.2} r={0.04} sep={0.1} eyeScale={t.eyeScale} />
+      <AnimeEyes p={p} L={t.L} x={-0.08} y={0.12} z={0.26} r={0.042} sep={0.09} eyeScale={t.eyeScale} />
     </group>
   );
 }
 
+/** Low spire, wide body whorl — reads as coiled gastropod, not a ball. */
+function snailShellGeometry() {
+  const profile = [
+    new Vector2(0.02, 0.0),
+    new Vector2(0.08, 0.05),
+    new Vector2(0.2, 0.16),
+    new Vector2(0.32, 0.34),
+    new Vector2(0.28, 0.52),
+    new Vector2(0.12, 0.58),
+    new Vector2(0.04, 0.5),
+  ];
+  return new LatheGeometry(profile, 36);
+}
+
 function PressureSnail({ p, t }: { p: CnftArtPalette; t: CnftArtVisualTraits }) {
   const foot = useRef<THREE.Group>(null);
+  const shell = useRef<THREE.Group>(null);
+  const shellGeo = useMemo(() => snailShellGeometry(), []);
+  const siphonGeo = useMemo(() => new THREE.CylinderGeometry(0.04, 0.06, 0.12, 8), []);
+  useEffect(
+    () => () => {
+      shellGeo.dispose();
+      siphonGeo.dispose();
+    },
+    [shellGeo, siphonGeo]
+  );
   useFrame((state) => {
     const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
     if (foot.current) {
-      const s = 1 + Math.sin(cl * 0.85) * 0.04 * t.breathAmp * 12;
-      foot.current.scale.setScalar(s);
+      const s = 1 + Math.sin(cl * 0.85) * 0.032 * t.breathAmp * 12;
+      foot.current.scale.set(s, 1, s * 1.02);
+    }
+    if (shell.current) {
+      shell.current.rotation.z = Math.sin(cl * 0.35) * 0.04;
     }
   });
+  const shellTint = new THREE.Color(p.shadow).lerp(new THREE.Color("#4a4038"), 0.35);
   return (
     <group>
-      <mesh position={[0.1, 0, 0]} scale={[0.6, 0.55, 0.5]}>
-        <sphereGeometry args={[0.5, 22, 18]} />
-        <meshPhysicalMaterial
-          {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.9, roughness: 0.5 })}
-        />
-      </mesh>
-      <group ref={foot} position={[-0.2, -0.15, 0.05]} scale={[0.5, 0.15, 0.4]}>
-        <mesh>
-          <sphereGeometry args={[0.5, 20, 12]} />
+      <group ref={shell} position={[0.06, 0.02, -0.04]} rotation={[-0.08, -0.35, 0.12]} scale={[0.92, 0.92, 0.92]}>
+        <mesh geometry={shellGeo} castShadow>
           <meshPhysicalMaterial
-            {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.95, roughness: 0.42 })}
+            color={shellTint}
+            roughness={0.55}
+            metalness={0.08}
+            clearcoat={0.28}
+            clearcoatRoughness={0.35}
+            emissive={new THREE.Color(p.shadow)}
+            emissiveIntensity={0.03}
+            envMapIntensity={0.72}
+          />
+        </mesh>
+        <mesh position={[-0.02, 0.36, 0.2]} rotation={[0.5, 0, 0]}>
+          <torusGeometry args={[0.08, 0.012, 6, 16, Math.PI * 1.1]} />
+          <meshPhysicalMaterial
+            color={shellTint}
+            roughness={0.5}
+            metalness={0.05}
+            emissive={new THREE.Color(0x000000)}
+            emissiveIntensity={0.02}
           />
         </mesh>
       </group>
-      <AnimeEyes p={p} L={t.L} x={-0.22} y={-0.02} z={0.1} r={0.03} sep={0.04} eyeScale={t.eyeScale} />
+      <group ref={foot} position={[0, -0.2, 0.02]}>
+        <mesh rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[0.36, 48]} />
+          <meshPhysicalMaterial
+            {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.95, roughness: 0.48, iridescent: true })}
+            side={THREE.DoubleSide}
+          />
+        </mesh>
+        <mesh position={[0.12, 0.02, 0.18]} rotation={[-Math.PI / 2, 0.2, 0]} scale={[1, 1, 0.55]}>
+          <circleGeometry args={[0.22, 32]} />
+          <meshPhysicalMaterial
+            color={p.skin}
+            emissive={new THREE.Color(p.biolume)}
+            emissiveIntensity={0.04 + t.L * 0.02}
+            roughness={0.52}
+            metalness={0.1}
+            side={THREE.DoubleSide}
+            opacity={0.92}
+            transparent
+          />
+        </mesh>
+      </group>
+      <mesh position={[-0.14, -0.06, 0.24]} rotation={[0.2, 0.4, 0]}>
+        <capsuleGeometry args={[0.06, 0.1, 4, 8]} />
+        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.85, roughness: 0.44 })} />
+      </mesh>
+      <mesh position={[-0.08, -0.05, 0.32]} rotation={[0.1, 0, 0]} geometry={siphonGeo}>
+        <meshPhysicalMaterial
+          color={p.shadow}
+          roughness={0.5}
+          emissive={new THREE.Color(p.biolume)}
+          emissiveIntensity={0.04}
+        />
+      </mesh>
+      <mesh position={[-0.1, 0.01, 0.22]}>
+        <cylinderGeometry args={[0.012, 0.01, 0.12, 5]} />
+        <meshPhysicalMaterial color={p.shadow} roughness={0.45} />
+      </mesh>
+      <mesh position={[-0.06, 0.01, 0.22]}>
+        <cylinderGeometry args={[0.012, 0.01, 0.12, 5]} />
+        <meshPhysicalMaterial color={p.shadow} roughness={0.45} />
+      </mesh>
+      <AnimeEyes p={p} L={t.L} x={-0.1} y={0.1} z={0.3} r={0.03} sep={0.05} eyeScale={t.eyeScale} />
     </group>
   );
 }
