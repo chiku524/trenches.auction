@@ -201,20 +201,23 @@ app.post("/v1/mint/cnft", async (c) => {
 app.get("/v1/gallery/cnft", async (c) => {
   const rpc = c.env.CNFT_RPC_URL;
   const tree = await resolveMerkleTreeAddress(c.env.DB, c.env.CNFT_MERKLE_TREE ?? "");
+  const orderQ = c.req.query("order");
+  const order: "newest" | "oldest" = orderQ === "oldest" ? "oldest" : "newest";
   if (!rpc || !tree) {
     return c.json({
       items: [],
       configured: false,
+      order,
       hint: "Set CNFT_RPC_URL secret and create a tree (admin) or CNFT_MERKLE_TREE var",
     });
   }
   const limRaw = c.req.query("limit");
   const lim = Math.min(1000, Math.max(1, Number.parseInt(limRaw ?? "200", 10) || 200));
-  const { items: dasItems, error: dasError } = await fetchCnftsByTree(rpc, tree, lim);
+  const { items: dasItems, error: dasError } = await fetchCnftsByTree(rpc, tree, lim, order);
   let items = dasItems;
   let dataSource: "das" | "d1" = "das";
   if (items.length === 0) {
-    const d1 = await fetchGalleryFromD1(c.env.DB, c.env.PUBLIC_BASE_URL, lim);
+    const d1 = await fetchGalleryFromD1(c.env.DB, c.env.PUBLIC_BASE_URL, lim, order);
     if (d1.length > 0) {
       items = d1;
       dataSource = "d1";
@@ -231,6 +234,7 @@ app.get("/v1/gallery/cnft", async (c) => {
       items,
       configured: true,
       tree,
+      order,
       dataSource,
       error: dataSource === "d1" ? null : (dasError ?? null),
       hint,
@@ -418,16 +422,6 @@ app.post("/v1/admin/cnft/tree", async (c) => {
   }
 
   const existing = await getPersistedCnftTree(c.env.DB);
-  if (existing) {
-    return c.json(
-      {
-        error: "cnft_tree already stored",
-        merkleTree: existing.merkle_tree,
-        hint: "Use the existing tree or remove the cnft_tree row in D1 only if you know the impact.",
-      },
-      409
-    );
-  }
 
   let body: {
     maxDepth?: number;
@@ -469,13 +463,33 @@ app.post("/v1/admin/cnft/tree", async (c) => {
   }
 
   await c.env.DB.prepare(
-    `INSERT INTO cnft_tree (id, merkle_tree, max_depth, max_buffer_size, canopy_depth, tree_public, cluster)
-     VALUES (1, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO cnft_tree (id, merkle_tree, max_depth, max_buffer_size, canopy_depth, tree_public, cluster, created_at)
+     VALUES (1, ?, ?, ?, ?, ?, ?, unixepoch())
+     ON CONFLICT(id) DO UPDATE SET
+       merkle_tree = excluded.merkle_tree,
+       max_depth = excluded.max_depth,
+       max_buffer_size = excluded.max_buffer_size,
+       canopy_depth = excluded.canopy_depth,
+       tree_public = excluded.tree_public,
+       cluster = excluded.cluster,
+       created_at = unixepoch()`
   )
     .bind(created.merkleTree, maxDepth, maxBufferSize, canopyDepth, treePublic ? 1 : 0, cluster)
     .run();
 
-  return c.json({ ok: true, tree: created }, 201);
+  const replaced = Boolean(existing);
+  return c.json(
+    {
+      ok: true,
+      tree: created,
+      replaced,
+      previousMerkleTree: replaced ? existing!.merkle_tree : null,
+      hint: replaced
+        ? "A new on-chain tree is now active. cNFTs minted on the previous tree remain on-chain but are not listed for this tree."
+        : null,
+    },
+    replaced ? 200 : 201
+  );
 });
 
 app.post("/v1/admin/cnft/mint-batch", async (c) => {

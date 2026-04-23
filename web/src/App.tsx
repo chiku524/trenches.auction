@@ -25,6 +25,7 @@ type GalleryJson = {
   }[];
   configured?: boolean;
   dataSource?: "das" | "d1";
+  order?: "newest" | "oldest";
   error?: string | null;
   hint?: string | null;
 };
@@ -314,13 +315,18 @@ function AdminPanel({
         />
       </label>
 
+      <p className="msg" style={{ marginTop: "0.75rem" }}>
+        <strong>Create / replace Merkle tree</strong> signs a new Bubblegum tree on-chain and saves it as the active
+        tree. If one was already stored, it is <strong>replaced</strong> (old cNFTs stay on-chain; the gallery lists the
+        active tree only when using DAS).
+      </p>
       <div className="actions" style={{ marginTop: "1rem" }}>
         <label>
           Max depth{" "}
           <input type="text" value={maxDepth} onChange={(e) => setMaxDepth(e.target.value)} style={{ width: "3rem" }} />
         </label>
         <button type="button" className="primary" disabled={busy} onClick={() => void createTree()}>
-          Create Merkle tree
+          Create / replace Merkle tree
         </button>
       </div>
 
@@ -482,12 +488,14 @@ function GalleryPanel({ refreshKey }: { refreshKey: number }) {
   const [data, setData] = useState<GalleryJson | null>(null);
   const [err, setErr] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sortOrder, setSortOrder] = useState<"newest" | "oldest">("newest");
 
   const load = useCallback(async () => {
     setErr("");
     setLoading(true);
     try {
-      const res = await fetch(`${API_BASE}/v1/gallery/cnft?limit=200`);
+      const q = new URLSearchParams({ limit: "200", order: sortOrder });
+      const res = await fetch(`${API_BASE}/v1/gallery/cnft?${q.toString()}`);
       const j = (await res.json()) as GalleryJson;
       setData(j);
     } catch (e) {
@@ -495,7 +503,7 @@ function GalleryPanel({ refreshKey }: { refreshKey: number }) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [sortOrder]);
 
   useEffect(() => {
     void load();
@@ -504,7 +512,18 @@ function GalleryPanel({ refreshKey }: { refreshKey: number }) {
   return (
     <div className="panel">
       <h2>Collection gallery</h2>
-      <div className="actions">
+      <div className="actions" style={{ flexWrap: "wrap", alignItems: "center", gap: "0.5rem" }}>
+        <label className="msg" style={{ display: "inline-flex", alignItems: "center", gap: "0.35rem" }}>
+          Order{" "}
+          <select
+            value={sortOrder}
+            onChange={(e) => setSortOrder(e.target.value === "oldest" ? "oldest" : "newest")}
+            style={{ minWidth: "9rem" }}
+          >
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+          </select>
+        </label>
         <button type="button" className="primary" disabled={loading} onClick={() => void load()}>
           {loading ? "Loading…" : "Load / refresh"}
         </button>
