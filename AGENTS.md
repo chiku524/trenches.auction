@@ -3,6 +3,7 @@
 - On Windows, install and use Solana CLI from WSL; the official installer does not support Git Bash/MSYS.
 - In bash, quote npm script arguments that contain `#` (for example cNFT mint names) so `#` is not treated as starting a comment.
 - cNFT artwork should read as creature-like and realistically shaded (anime–3D / PBR); keep the deterministic 2D preview and the web 3D viewer stylistically aligned.
+- For the web 3D creature viewer, when archetypes read as too generic or blob-like, the user prefers rebuilding bodies and shapes from scratch rather than only small tweaks.
 
 ## Learned Workspace Facts
 
@@ -17,3 +18,4 @@
 - Root `package-lock.json` must match `package.json` for `npm ci` in CI; if installs fail on missing transitive dependencies, regenerate the lockfile with `npm install` and commit the update.
 - `CNFT_MINT_KEYPAIR` (JSON 64-byte array) and `CNFT_RPC_URL` are **Cloudflare Worker secrets** (set via `wrangler secret put`, not GitHub); public Solana RPC endpoints (`api.*.solana.com`) return 403 from Workers datacenter IPs—use a dedicated provider URL (Helius, QuickNode, Alchemy, Triton) with an API key on the same cluster as the tree.
 - Live/environmental traits from `computeLiveMetadataTraits` are recomputed on each metadata read (not stored in D1), so JSON metadata reflects the current time and server rules on fetch unless clients cache responses.
+- Per-archetype 3D meshes for the trench viewer live in `web/src/trench3d/CreatureByArchetype.tsx`; `@react-three/drei` `RoundedBox` expects materials as children of `RoundedBox` (not siblings). Shell-heavy archetypes (for example Coral Hermit and Pressure Snail) have used lathe geometry for shells with `RoundedBox` body masses. Verify `web/` changes with `npm run build` in `web/`.
