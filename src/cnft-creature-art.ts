@@ -1,4 +1,4 @@
-import { hash32 } from "./collection-traits";
+import { dexTypeLineFromDna, hash32 } from "./collection-traits";
 import {
   getArtVisualTraits,
   getBiomePalette,
@@ -26,15 +26,15 @@ function num(dna: Dna, key: string, def: number, min: number, max: number): numb
   return def;
 }
 
-/** Dermal mottling — density from Variant Seed + Pressure (camouflage load). */
+/** Dermal mottling — lighter than photoreal speckle; keeps silhouettes “figure clean” (dex-toy). */
 function dermalMottle(p: Palette, mint: string, t: VisualTraits, salt: string): string {
-  const n = 2 + (t.variantSeed % 4) + (t.pressure % 3);
+  const n = Math.max(1, 1 + (t.variantSeed % 4) + (t.pressure % 2));
   const o: string[] = [];
   for (let i = 0; i < n; i++) {
     const x = 100 + rnd(mint, `${salt}mx${i}`, 300);
     const y = 90 + rnd(mint, `${salt}my${i}`, 220);
-    const rx = 4 + rnd(mint, `${salt}mr${i}`, 18);
-    const ro = 0.1 + (t.pressure / 20) * 0.12;
+    const rx = 4 + rnd(mint, `${salt}mr${i}`, 16);
+    const ro = 0.06 + (t.pressure / 22) * 0.08;
     o.push(
       `<ellipse cx="${x}" cy="${y}" rx="${rx}" ry="${rx * 0.55}" fill="${p.shadow}" fill-opacity="${ro}" transform="rotate(${rnd(mint, `${salt}mt${i}`, 50) - 25} ${x} ${y})"/>`
     );
@@ -49,7 +49,7 @@ function biomeAccents(biome: string, p: Palette, mint: string): string {
   if (b.includes("hydro") || b.includes("fan")) {
     for (let i = 0; i < 10; i++) {
       o.push(
-        `<circle cx="${30 + rnd(mint, `ha${i}`, 450)}" cy="${100 + rnd(mint, `hb${i}`, 280)}" r="${0.8 + rnd(mint, `hc${i}`, 3) / 2}" fill="#ff9f43" fill-opacity="0.14"/>`
+        `<circle cx="${30 + rnd(mint, `ha${i}`, 450)}" cy="${100 + rnd(mint, `hb${i}`, 280)}" r="${0.8 + rnd(mint, `hc${i}`, 3) / 2}" fill="#ffb050" fill-opacity="0.22"/>`
       );
     }
     o.push(
@@ -77,8 +77,7 @@ function biomeAccents(biome: string, p: Palette, mint: string): string {
 }
 
 /**
- * Anime-3D / toon-shaded benthic eye: crisp rim, L-driven iris glow, multi catchlights
- * (game-char shading; still zoological pupil shapes).
+ * Toon / dex eye: high-contrast “sprite” read — bold ring, big catchlights, bright iris.
  */
 function anime3dEye(x: number, y: number, r: number, mint: string, isRight: number, p: Palette, L: number, eyeScale = 1): string {
   const r0 = r * eyeScale;
@@ -88,19 +87,25 @@ function anime3dEye(x: number, y: number, r: number, mint: string, isRight: numb
   const verticalSlit = rnd(mint, "pupi", 2) === 0;
   const pupW = verticalSlit ? r0 * 0.14 : r0 * 0.26;
   const pupH = verticalSlit ? r0 * 0.4 : r0 * 0.26;
-  const irGlow = 0.45 + (L / 25) * 0.4;
+  const irGlow = 0.52 + (L / 22) * 0.45;
   const topLid = -r0 * 0.92;
+  const spark = rnd(mint, "spk", 10) > 6 ? r0 * 0.12 : 0;
   return `<g transform="translate(${cx},${cy})">
-<ellipse rx="${r0 * 1.12}" ry="${r0 * 1.02}" fill="#0a0b10" fill-opacity="0.35" transform="translate(1,2)"/>
-<ellipse rx="${r0 * 1.08}" ry="${r0 * 0.98}" fill="#0e1522" stroke="#1a1f2e" stroke-width="1.65"/>
-<path d="M ${-r0} ${topLid * 0.2} Q 0 ${topLid} ${r0} ${topLid * 0.2}" fill="none" stroke="#02060a" stroke-width="1.1" stroke-linecap="round" opacity="0.45"/>
-<ellipse rx="${r0 * 0.86}" ry="${r0 * 0.78}" fill="url(#irisGrad)" fill-opacity="${irGlow}"/>
-<ellipse rx="${pupW * 0.3}" ry="${pupH * 0.3}" cx="${-r0 * 0.1}" cy="${-r0 * 0.08}" fill="#ffffff" fill-opacity="0.65"/>
-<ellipse rx="${pupW}" ry="${pupH}" fill="#030308"/>
-<circle cx="${-r0 * 0.3}" cy="${-r0 * 0.25}" r="${r0 * 0.2}" fill="#ffffff" fill-opacity="0.6"/>
-<circle cx="${-r0 * 0.1}" cy="${-r0 * 0.1}" r="${r0 * 0.1}" fill="#ffffff" fill-opacity="0.85"/>
-<circle cx="${r0 * 0.15}" cy="${-r0 * 0.2}" r="${r0 * 0.04}" fill="#ffffff" fill-opacity="0.45"/>
-<ellipse rx="${r0 * 1.1}" ry="${r0 * 1.0}" fill="none" stroke="url(#rimEye)" stroke-width="0.6" opacity="0.8"/>
+<ellipse rx="${r0 * 1.14}" ry="${r0 * 1.04}" fill="#0a0b10" fill-opacity="0.28" transform="translate(2,3)"/>
+<ellipse rx="${r0 * 1.1}" ry="${r0 * 1.0}" fill="#e8f0ff" fill-opacity="0.96" stroke="#111820" stroke-width="2.1"/>
+<path d="M ${-r0 * 0.95} ${topLid * 0.2} Q 0 ${topLid} ${r0 * 0.95} ${topLid * 0.2}" fill="none" stroke="#02060a" stroke-width="1" stroke-linecap="round" opacity="0.35"/>
+<ellipse rx="${r0 * 0.84}" ry="${r0 * 0.76}" fill="url(#irisGrad)" fill-opacity="${irGlow}"/>
+<ellipse rx="${pupW * 0.35}" ry="${pupH * 0.35}" cx="${-r0 * 0.1}" cy="${-r0 * 0.08}" fill="#ffffff" fill-opacity="0.78"/>
+<ellipse rx="${pupW}" ry="${pupH}" fill="#050508"/>
+<circle cx="${-r0 * 0.32}" cy="${-r0 * 0.26}" r="${r0 * 0.22}" fill="#ffffff" fill-opacity="0.9"/>
+<circle cx="${-r0 * 0.08}" cy="${-r0 * 0.1}" r="${r0 * 0.12}" fill="#ffffff" fill-opacity="0.98"/>
+<circle cx="${r0 * 0.18}" cy="${-r0 * 0.2}" r="${r0 * 0.05}" fill="#ffffff" fill-opacity="0.6"/>
+${
+  spark > 0
+    ? `<circle cx="${r0 * 0.55}" cy="${-r0 * 0.5}" r="${spark * 0.25}" fill="#ffffff" fill-opacity="0.85"/>`
+    : ""
+}
+<ellipse rx="${r0 * 1.05}" ry="${r0 * 0.95}" fill="none" stroke="url(#rimEye)" stroke-width="0.7" opacity="0.9"/>
 </g>`;
 }
 
@@ -116,7 +121,7 @@ function lanternGulper(p: Palette, mint: string, t: VisualTraits): string {
 <path d="${body}" fill="#020408" fill-opacity="0.2" transform="translate(2,3)"/>
 <path d="${body}" fill="url(#celDerm)" stroke="#141b26" stroke-width="1.35" stroke-linejoin="round"/>
 <path d="${body}" fill="none" stroke="url(#animeRimLine)" stroke-width="0.82" stroke-linejoin="round"/>
-<ellipse cx="215" cy="150" rx="48" ry="24" fill="url(#keySpec)" fill-opacity="0.2" transform="rotate(-10 215 150)"/>
+<ellipse cx="215" cy="150" rx="52" ry="26" fill="url(#keySpec)" fill-opacity="0.34" transform="rotate(-10 215 150)"/>
 ${dermalMottle(p, mint, t, "lg")}
 <path d="${belly}" fill="url(#ventralShade)" fill-opacity="0.55" stroke="none"/>
 <path d="M 230 255 Q 256 275 285 255" fill="none" stroke="#0a0c12" stroke-width="5" stroke-linecap="round" opacity="0.5"/>
@@ -157,7 +162,7 @@ function glassfinDrifter(p: Palette, mint: string, t: VisualTraits): string {
 <path d="${trunk}" fill="#030508" fill-opacity="0.18" transform="translate(2,2)"/>
 <path d="${trunk}" fill="url(#celDerm)" fill-opacity="0.88" stroke="#182230" stroke-width="1" stroke-linejoin="round"/>
 <path d="${trunk}" fill="none" stroke="url(#animeRimLine)" stroke-width="0.78"/>
-<ellipse cx="200" cy="170" rx="60" ry="30" fill="url(#keySpec)" fill-opacity="0.16" transform="rotate(-6 200 170)"/>
+<ellipse cx="200" cy="170" rx="64" ry="32" fill="url(#keySpec)" fill-opacity="0.3" transform="rotate(-6 200 170)"/>
 ${dermalMottle(p, mint, t, "gf")}
 <g transform="translate(400, 200) scale(${fs} 1) translate(-400,-200)">
 <path d="M 200 180 Q 256 90 320 180" fill="url(#dorsalFin)" fill-opacity="0.5" stroke="${p.skin}" stroke-width="0.3"/>
@@ -420,22 +425,34 @@ export function buildCreaturePreviewSvg(dna: Dna, name: string, mint: string): s
   const g2 = 2.2 + L * 0.45;
   const g3 = 0.35 + (L / 22) * 0.35;
 
+  const nPart = 18 + (t.variantSeed % 14);
   const particulates: string[] = [];
-  for (let i = 0; i < 32; i++) {
+  for (let i = 0; i < nPart; i++) {
     const x = rnd(mint, `p${i}`, 500) + 6;
     const y = rnd(mint, `q${i}`, 420) + 10;
     const s = 0.15 + (rnd(mint, `r${i}`, 25) / 30);
-    const o = 0.04 + (i % 3) * 0.03;
-    particulates.push(`<circle cx="${x}" cy="${y}" r="${s}" fill="#e0f2fe" fill-opacity="${o}"/>`);
+    const o = 0.03 + (i % 3) * 0.025;
+    particulates.push(`<circle cx="${x}" cy="${y}" r="${s}" fill="#e8f4ff" fill-opacity="${o}"/>`);
+  }
+  if (rnd(mint, "twinkle", 10) > 4) {
+    for (let k = 0; k < 5; k++) {
+      const sx = 80 + rnd(mint, `tw${k}`, 360);
+      const sy = 60 + rnd(mint, `ty${k}`, 220);
+      particulates.push(
+        `<path d="M ${sx} ${sy - 4} L ${sx} ${sy + 4} M ${sx - 4} ${sy} L ${sx + 4} ${sy}" stroke="#fff8e8" stroke-width="0.9" stroke-opacity="0.35" stroke-linecap="round"/>`
+      );
+    }
   }
 
   const caust: string[] = [];
   for (let c = 0; c < 4; c++) {
     const x = 40 + c * 120 + rnd(mint, `c${c}`, 40);
     caust.push(
-      `<ellipse cx="${x}" cy="${80 + c * 15}" rx="${120 + c * 20}" ry="${18 - c * 2}" fill="#bfe8ff" fill-opacity="0.04" transform="rotate(-8 ${x} 80)"/>`
+      `<ellipse cx="${x}" cy="${80 + c * 15}" rx="${120 + c * 20}" ry="${18 - c * 2}" fill="#d4f0ff" fill-opacity="0.07" transform="rotate(-8 ${x} 80)"/>`
     );
   }
+
+  const typeLine = dexTypeLineFromDna(dna, a);
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
@@ -446,35 +463,39 @@ export function buildCreaturePreviewSvg(dna: Dna, name: string, mint: string): s
 <stop offset="0.5" stop-color="${p.deep}"/>
 <stop offset="1" stop-color="#000"/>
 </radialGradient>
-<linearGradient id="celDerm" x1="10%" y1="0" x2="90%" y2="100%">
+<linearGradient id="celDerm" x1="8%" y1="2%" x2="88%" y2="100%">
 <stop offset="0" stop-color="${p.skinHi}"/>
-<stop offset="0.3" stop-color="${p.skinHi}"/>
-<stop offset="0.36" stop-color="${p.skin}"/>
-<stop offset="0.7" stop-color="${p.skin}"/>
-<stop offset="0.77" stop-color="${p.shadow}"/>
-<stop offset="1" stop-color="#04080f"/>
+<stop offset="0.35" stop-color="${p.skin}"/>
+<stop offset="0.62" stop-color="${p.shadow}"/>
+<stop offset="1" stop-color="#03060c"/>
 </linearGradient>
 <linearGradient id="skinG" x1="20%" y1="5%" x2="80%" y2="95%">
 <stop offset="0" stop-color="${p.skinHi}"/>
 <stop offset="0.4" stop-color="${p.skin}"/>
 <stop offset="1" stop-color="${p.shadow}"/>
 </linearGradient>
-<radialGradient id="keySpec" cx="30%" cy="18%" r="55%">
-<stop offset="0" stop-color="#ffffff" stop-opacity="0.5"/>
-<stop offset="0.25" stop-color="#e0e8f8" stop-opacity="0.15"/>
-<stop offset="0.5" stop-color="transparent"/>
+<radialGradient id="keySpec" cx="28%" cy="16%" r="58%">
+<stop offset="0" stop-color="#ffffff" stop-opacity="0.75"/>
+<stop offset="0.2" stop-color="#f0f6ff" stop-opacity="0.35"/>
+<stop offset="0.45" stop-color="transparent"/>
+<stop offset="1" stop-color="transparent"/>
+</radialGradient>
+<radialGradient id="stageSpot" cx="50%" cy="42%" r="55%">
+<stop offset="0" stop-color="#fffef5" stop-opacity="0.14"/>
+<stop offset="0.35" stop-color="#c8e4ff" stop-opacity="0.06"/>
 <stop offset="1" stop-color="transparent"/>
 </radialGradient>
 <linearGradient id="animeRimLine" x1="0" y1="0" x2="0" y2="1">
-<stop offset="0" stop-color="#c4d0e8" stop-opacity="0.65"/>
-<stop offset="0.22" stop-color="transparent"/>
-<stop offset="0.78" stop-color="transparent"/>
-<stop offset="1" stop-color="#030408" stop-opacity="0.45"/>
+<stop offset="0" stop-color="#eef4ff" stop-opacity="0.85"/>
+<stop offset="0.18" stop-color="transparent"/>
+<stop offset="0.8" stop-color="transparent"/>
+<stop offset="1" stop-color="#000510" stop-opacity="0.72"/>
 </linearGradient>
-<radialGradient id="irisGrad" cx="32%" cy="32%" r="70%">
+<radialGradient id="irisGrad" cx="34%" cy="34%" r="72%">
 <stop offset="0" stop-color="${p.biolume}"/>
-<stop offset="0.5" stop-color="${p.skinHi}"/>
-<stop offset="1" stop-color="#0a0c10"/>
+<stop offset="0.42" stop-color="${p.skinHi}"/>
+<stop offset="0.88" stop-color="#182030"/>
+<stop offset="1" stop-color="#05060a"/>
 </radialGradient>
 <linearGradient id="rimEye" x1="0" y1="0" x2="1" y2="1">
 <stop offset="0" stop-color="#d8e4ff" stop-opacity="0.35"/>
@@ -593,10 +614,10 @@ export function buildCreaturePreviewSvg(dna: Dna, name: string, mint: string): s
 <stop offset="0.5" stop-color="transparent"/>
 <stop offset="1" stop-color="#000" stop-opacity="0"/>
 </radialGradient>
-<radialGradient id="vignette" cx="50%" cy="45%" r="75%">
+<radialGradient id="vignette" cx="50%" cy="45%" r="78%">
 <stop offset="0" stop-color="transparent"/>
-<stop offset="0.75" stop-color="#000" stop-opacity="0.25"/>
-<stop offset="1" stop-color="#000" stop-opacity="0.65"/>
+<stop offset="0.72" stop-color="#000" stop-opacity="0.18"/>
+<stop offset="1" stop-color="#000" stop-opacity="0.52"/>
 </radialGradient>
 <linearGradient id="labelFade" x1="0" y1="1" x2="0" y2="0">
 <stop offset="0" stop-color="#020617" stop-opacity="0.94"/>
@@ -614,12 +635,13 @@ export function buildCreaturePreviewSvg(dna: Dna, name: string, mint: string): s
 <filter id="filmGrain" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
 <feTurbulence type="fractalNoise" baseFrequency="0.65" numOctaves="2" result="n"/>
 <feColorMatrix in="n" type="luminanceToAlpha" result="a"/>
-<feFlood flood-color="#bcd4e6" flood-opacity="0.12" result="f"/>
+<feFlood flood-color="#bcd4e6" flood-opacity="0.055" result="f"/>
 <feComposite in="f" in2="a" operator="in" result="c"/>
 <feMerge><feMergeNode in="c"/></feMerge>
 </filter>
 </defs>
 <rect width="512" height="512" fill="url(#bg)"/>
+<rect width="512" height="512" fill="url(#stageSpot)" style="pointer-events:none"/>
 <rect width="512" height="512" filter="url(#filmGrain)" style="pointer-events:none" />
 ${caust.join("")}
 ${particulates.join("")}
@@ -628,13 +650,19 @@ ${biomeAccents(biome, p, mint)}
 ${body}
 </g>
 <rect width="512" height="512" fill="url(#vignette)" style="pointer-events:none"/>
-<rect y="360" width="512" height="152" fill="url(#labelFade)" style="pointer-events:none"/>
-<rect x="20" y="400" width="472" height="80" fill="#0a1018" fill-opacity="0.78" stroke="#1c3048" stroke-width="1" rx="10"/>
-<text x="256" y="432" text-anchor="middle" fill="#f8fafc" font-family="system-ui,Segoe UI,sans-serif" font-size="17" font-weight="600">${esc(
+<rect y="348" width="512" height="164" fill="url(#labelFade)" style="pointer-events:none"/>
+<rect x="16" y="378" width="480" height="112" fill="#060b12" fill-opacity="0.88" stroke="#d4a017" stroke-width="2.5" rx="14"/>
+<rect x="24" y="386" width="464" height="96" fill="none" stroke="#2a1f0a" stroke-width="1" stroke-opacity="0.45" rx="10"/>
+<text x="256" y="404" text-anchor="middle" fill="#e8c84a" font-family="system-ui,Segoe UI,sans-serif" font-size="11" font-weight="700" letter-spacing="0.14em">${esc(
+    typeLine
+  )}</text>
+<text x="256" y="432" text-anchor="middle" fill="#f8fafc" font-family="system-ui,Segoe UI,sans-serif" font-size="18" font-weight="700">${esc(
     name || "Trench creature"
   )}</text>
-<text x="256" y="456" text-anchor="middle" fill="#94a3b8" font-family="system-ui,Segoe UI,sans-serif" font-size="12">${esc(
+<text x="256" y="458" text-anchor="middle" fill="#9cb0c4" font-family="system-ui,Segoe UI,sans-serif" font-size="12">${esc(
     species
   )}${mood ? " · " + esc(mood) : ""} · ${esc(biome)}</text>
+<rect x="6" y="6" width="500" height="500" fill="none" stroke="#e8b82a" stroke-width="4" rx="18" style="pointer-events:none"/>
+<rect x="10" y="10" width="492" height="492" fill="none" stroke="#2a1d06" stroke-width="1" rx="16" style="pointer-events:none" opacity="0.55"/>
 </svg>`;
 }

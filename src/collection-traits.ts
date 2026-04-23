@@ -26,6 +26,18 @@ export const SPECIES = [
   "Echoray",
 ] as const;
 
+/** One “type line” per species (same order as `SPECIES` / archetype index). Shown on metadata + preview art. */
+export const DEX_TYPE_LINES = [
+  "AQUA · SHADE",
+  "AQUA · GLASS",
+  "BRINE · STEEL",
+  "INK · DEEP",
+  "SPARK · FANG",
+  "REEF · SHELL",
+  "STONE · CRUSH",
+  "RAY · SPECTER",
+] as const;
+
 /** Earlier mints may list these; index must match `SPECIES` archetype order. */
 export const LEGACY_SPECIES_INDEX: Readonly<Record<string, number>> = {
   "Lantern Gulper": 0,
@@ -62,14 +74,28 @@ export function hash32(input: string): number {
   return h >>> 0;
 }
 
+export function dexTypeLineForArchetype(archetypeIndex: number): string {
+  const i = ((archetypeIndex % 8) + 8) % 8;
+  return DEX_TYPE_LINES[i] ?? "TRENCH";
+}
+
+/** Prefer on-chain `Dex Type` when present; otherwise line for `archetypeIndex` (legacy mints). */
+export function dexTypeLineFromDna(dna: Dna, archetypeIndex: number): string {
+  const v = dna["Dex Type"];
+  if (typeof v === "string" && v.trim()) return v.trim();
+  return dexTypeLineForArchetype(archetypeIndex);
+}
+
 /** Immutable DNA for Metaplex attributes. Live / time traits are added in `computeLiveMetadataTraits`. */
 export function dnaForAssetId(assetId: string): Dna {
   const h = hash32(assetId);
   const h2 = hash32(`${assetId}:traits`);
+  const speciesIndex = (h >>> 8) % SPECIES.length;
   return {
     "Asset Type": "Compressed",
     Biome: BIOMES[h % BIOMES.length],
-    Species: SPECIES[(h >>> 8) % SPECIES.length],
+    Species: SPECIES[speciesIndex],
+    "Dex Type": DEX_TYPE_LINES[speciesIndex],
     "Pressure Class": 1 + ((h >>> 16) % 10),
     Luminosity: Math.round(((h >>> 24) % 100) / 10) / 10,
     Mood: MOODS[h2 % MOODS.length],

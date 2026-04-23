@@ -43,45 +43,76 @@ function AnimeEyes({ p, L, x, y, z, r, sep, eyeScale = 1 }: { p: CnftArtPalette;
 }
 
 function LanternGulper({ p, t, fs }: { p: CnftArtPalette; t: CnftArtVisualTraits; fs: number }) {
+  const lure = useRef<THREE.Group>(null);
+  const fins = useRef<THREE.Group>(null);
+  const body = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
+    if (lure.current) {
+      lure.current.position.y = 0.62 + Math.sin(cl * 2.0) * 0.04;
+      lure.current.rotation.z = Math.sin(cl * 1.65) * 0.1;
+    }
+    if (fins.current) {
+      fins.current.rotation.x = Math.sin(cl * 1.35) * t.finFlap * 0.25;
+    }
+    if (body.current) {
+      body.current.rotation.x = Math.sin(cl * 0.9) * 0.04;
+    }
+  });
   return (
     <group>
-      <mesh position={[0, 0, 0.08]}>
-        <capsuleGeometry args={[0.36, 1, 5, 16]} />
-        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1.05 })} />
-      </mesh>
-      <mesh position={[0, 0.48, 0.4]}>
-        <cylinderGeometry args={[0.02, 0.04, 0.2, 6]} />
-        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { roughness: 0.35 })} />
-      </mesh>
-      <mesh position={[0, 0.62, 0.5]}>
-        <sphereGeometry args={[0.12, 16, 12]} />
-        <meshPhysicalMaterial
-          {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1.4, roughness: 0.3 })}
-        />
-      </mesh>
-      <group scale={[fs, 1, 1]}>
-        <mesh position={[-0.4, -0.05, 0.1]} rotation={[0.2, 0, 0.45]}>
-          <boxGeometry args={[0.1, 0.06, 0.38]} />
-          <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { metalness: 0.2 })} />
+      <group ref={body}>
+        <mesh position={[0, 0, 0.08]}>
+          <capsuleGeometry args={[0.36, 1, 5, 16]} />
+          <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1.05, iridescent: true })} />
         </mesh>
-        <mesh position={[0.4, -0.05, 0.1]} rotation={[0.2, 0, -0.45]}>
-          <boxGeometry args={[0.1, 0.06, 0.38]} />
-          <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { metalness: 0.2 })} />
+        <mesh position={[0, 0.48, 0.4]}>
+          <cylinderGeometry args={[0.02, 0.04, 0.2, 6]} />
+          <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { roughness: 0.35 })} />
         </mesh>
+        <group ref={lure} position={[0, 0.62, 0.5]}>
+          <mesh>
+            <sphereGeometry args={[0.12, 16, 12]} />
+            <meshPhysicalMaterial
+              {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1.4, roughness: 0.3 })}
+            />
+          </mesh>
+        </group>
+        <group ref={fins} scale={[fs, 1, 1]}>
+          <mesh position={[-0.4, -0.05, 0.1]} rotation={[0.2, 0, 0.45]}>
+            <boxGeometry args={[0.1, 0.06, 0.38]} />
+            <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { metalness: 0.2 })} />
+          </mesh>
+          <mesh position={[0.4, -0.05, 0.1]} rotation={[0.2, 0, -0.45]}>
+            <boxGeometry args={[0.1, 0.06, 0.38]} />
+            <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { metalness: 0.2 })} />
+          </mesh>
+        </group>
+        <AnimeEyes p={p} L={t.L} x={-0.15} y={0.12} z={0.4} r={0.08} sep={0.2} eyeScale={t.eyeScale} />
       </group>
-      <AnimeEyes p={p} L={t.L} x={-0.15} y={0.12} z={0.4} r={0.08} sep={0.2} eyeScale={t.eyeScale} />
     </group>
   );
 }
 
 function GlassfinDrifter({ p, t, fs }: { p: CnftArtPalette; t: CnftArtVisualTraits; fs: number }) {
+  const tail = useRef<THREE.Group>(null);
+  const dorsal = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
+    if (tail.current) {
+      tail.current.rotation.y = Math.sin(cl * 1.9) * 0.35 * t.finFlap;
+    }
+    if (dorsal.current) {
+      dorsal.current.rotation.x = -0.2 + Math.sin(cl * 1.5) * 0.12 * t.finFlap;
+    }
+  });
   return (
     <group>
       <mesh scale={[1.55, 0.5, 0.72]}>
         <sphereGeometry args={[0.52, 28, 20]} />
         <meshPhysicalMaterial {...animeGlassProps(p, t.L)} />
       </mesh>
-      <group scale={[fs, 1, 1]}>
+      <group ref={dorsal} scale={[fs, 1, 1]}>
         <mesh position={[0, 0.2, 0.05]} rotation={[-0.2, 0, 0]}>
           <boxGeometry args={[0.4, 0.02, 0.55]} />
           <meshPhysicalMaterial
@@ -110,18 +141,20 @@ function GlassfinDrifter({ p, t, fs }: { p: CnftArtPalette; t: CnftArtVisualTrai
             envMapIntensity={0.8}
           />
         </mesh>
-        <mesh position={[-0.5, 0, 0]} rotation={[0, -0.5, 0]}>
-          <boxGeometry args={[0.02, 0.3, 0.45]} />
-          <meshPhysicalMaterial
-            color={p.skin}
-            transparent
-            opacity={0.7}
-            metalness={0.25}
-            roughness={0.35}
-            sheen={0.55}
-            sheenColor={new THREE.Color(p.skinHi)}
-          />
-        </mesh>
+        <group ref={tail} position={[-0.5, 0, 0]} rotation={[0, -0.5, 0]}>
+          <mesh>
+            <boxGeometry args={[0.02, 0.3, 0.45]} />
+            <meshPhysicalMaterial
+              color={p.skin}
+              transparent
+              opacity={0.7}
+              metalness={0.25}
+              roughness={0.35}
+              sheen={0.55}
+              sheenColor={new THREE.Color(p.skinHi)}
+            />
+          </mesh>
+        </group>
       </group>
       <AnimeEyes p={p} L={t.L} x={-0.28} y={0.04} z={0.3} r={0.05} sep={0.16} eyeScale={t.eyeScale} />
     </group>
@@ -130,11 +163,19 @@ function GlassfinDrifter({ p, t, fs }: { p: CnftArtPalette; t: CnftArtVisualTrai
 
 function MantisShrimp({ p, t, segs, mint }: { p: CnftArtPalette; t: CnftArtVisualTraits; segs: number; mint: string }) {
   const w = 0.14;
+  const clawL = useRef<THREE.Group>(null);
+  const clawR = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
+    const f = t.finFlap;
+    if (clawL.current) clawL.current.rotation.z = 0.2 + Math.sin(cl * 2.2) * 0.35 * f;
+    if (clawR.current) clawR.current.rotation.z = -0.2 + Math.sin(cl * 2.2 + 0.6) * 0.35 * f;
+  });
   return (
     <group>
       <mesh position={[-0.2, 0, 0.1]} rotation={[0.1, 0, 0.3]}>
         <boxGeometry args={[0.2, 0.15, 0.35]} />
-        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { metalness: 0.2 })} />
+        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { metalness: 0.2, iridescent: true })} />
       </mesh>
       {Array.from({ length: segs }, (_, s) => (
         <mesh
@@ -144,32 +185,36 @@ function MantisShrimp({ p, t, segs, mint }: { p: CnftArtPalette; t: CnftArtVisua
         >
           <boxGeometry args={[w * 0.9, 0.18, 0.2]} />
           <meshPhysicalMaterial
-            {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.95, roughness: 0.44 })}
+            {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.95, roughness: 0.44, iridescent: true })}
           />
         </mesh>
       ))}
-      <mesh position={[-0.55, 0.1, 0.15]} rotation={[0.5, 0, 0.2]}>
-        <boxGeometry args={[0.12, 0.05, 0.4]} />
-        <meshPhysicalMaterial
-          color={p.shadow}
-          metalness={0.35}
-          roughness={0.4}
-          clearcoat={0.25}
-          emissive={new THREE.Color(p.biolume)}
-          emissiveIntensity={0.08 + (t.L / 30)}
-        />
-      </mesh>
-      <mesh position={[0.5, 0.1, 0.2]} rotation={[0.5, 0, -0.2]}>
-        <boxGeometry args={[0.12, 0.05, 0.4]} />
-        <meshPhysicalMaterial
-          color={p.shadow}
-          metalness={0.35}
-          roughness={0.4}
-          clearcoat={0.25}
-          emissive={new THREE.Color(p.biolume)}
-          emissiveIntensity={0.08 + (t.L / 30)}
-        />
-      </mesh>
+      <group ref={clawL} position={[-0.55, 0.1, 0.15]} rotation={[0.5, 0, 0.2]}>
+        <mesh>
+          <boxGeometry args={[0.12, 0.05, 0.4]} />
+          <meshPhysicalMaterial
+            color={p.shadow}
+            metalness={0.35}
+            roughness={0.4}
+            clearcoat={0.25}
+            emissive={new THREE.Color(p.biolume)}
+            emissiveIntensity={0.08 + (t.L / 30)}
+          />
+        </mesh>
+      </group>
+      <group ref={clawR} position={[0.5, 0.1, 0.2]} rotation={[0.5, 0, -0.2]}>
+        <mesh>
+          <boxGeometry args={[0.12, 0.05, 0.4]} />
+          <meshPhysicalMaterial
+            color={p.shadow}
+            metalness={0.35}
+            roughness={0.4}
+            clearcoat={0.25}
+            emissive={new THREE.Color(p.biolume)}
+            emissiveIntensity={0.08 + (t.L / 30)}
+          />
+        </mesh>
+      </group>
       <AnimeEyes p={p} L={t.L} x={-0.48} y={0.1} z={0.2} r={0.05} sep={0.1} eyeScale={t.eyeScale} />
     </group>
   );
@@ -177,6 +222,18 @@ function MantisShrimp({ p, t, segs, mint }: { p: CnftArtPalette; t: CnftArtVisua
 
 function Octoid({ p, t, mint }: { p: CnftArtPalette; t: CnftArtVisualTraits; mint: string }) {
   const k = t.moodT.tentacleK;
+  const armRefs = useRef<(THREE.Group | null)[]>([]);
+  useFrame((state) => {
+    const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
+    const arr = armRefs.current;
+    for (let i = 0; i < arr.length; i++) {
+      const g = arr[i];
+      if (!g) continue;
+      const a = (i / 8) * Math.PI * 2;
+      g.rotation.x = Math.sin(cl * 1.2 + a) * 0.2 * t.finFlap;
+      g.rotation.y = Math.cos(cl * 0.85 + a * 1.1) * 0.12;
+    }
+  });
   const geoms = useMemo(() => {
     const ge: TubeGeometry[] = [];
     for (let i = 0; i < 8; i++) {
@@ -214,22 +271,29 @@ function Octoid({ p, t, mint }: { p: CnftArtPalette; t: CnftArtVisualTraits; min
     <group>
       <mesh scale={[1, 0.8, 0.95]}>
         <sphereGeometry args={[0.38, 32, 24]} />
-        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1, roughness: 0.48 })} />
+        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1, roughness: 0.48, iridescent: true })} />
       </mesh>
       {geoms.map((geometry, i) => (
-        <mesh key={i} geometry={geometry}>
-          <meshPhysicalMaterial
-            color={p.skin}
-            emissive={new THREE.Color(p.biolume)}
-            emissiveIntensity={0.03 + t.L / 40}
-            metalness={0.15}
-            roughness={0.48}
-            sheen={0.55}
-            sheenColor={new THREE.Color(p.shadow)}
-            clearcoat={0.3}
-            envMapIntensity={0.7}
-          />
-        </mesh>
+        <group
+          key={i}
+          ref={(el) => {
+            armRefs.current[i] = el;
+          }}
+        >
+          <mesh geometry={geometry}>
+            <meshPhysicalMaterial
+              color={p.skin}
+              emissive={new THREE.Color(p.biolume)}
+              emissiveIntensity={0.03 + t.L / 40}
+              metalness={0.15}
+              roughness={0.48}
+              sheen={0.55}
+              sheenColor={new THREE.Color(p.shadow)}
+              clearcoat={0.3}
+              envMapIntensity={0.7}
+            />
+          </mesh>
+        </group>
       ))}
       <mesh position={[0.15, 0, 0.18]} rotation={[0, 0, -0.2]}>
         <cylinderGeometry args={[0, 0.04, 0.18, 6]} />
@@ -275,11 +339,20 @@ function SpineEel({ p, t, nSpine, mint }: { p: CnftArtPalette; t: CnftArtVisualT
     return o;
   }, [nSpine]);
 
+  const wiggle = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
+    if (wiggle.current) {
+      wiggle.current.rotation.z = Math.sin(cl * 1.55) * 0.11 * t.finFlap;
+      wiggle.current.rotation.y = Math.sin(cl * 0.55) * 0.08;
+    }
+  });
+
   const head = curve.getPointAt(0.02);
   return (
-    <group>
+    <group ref={wiggle}>
       <mesh geometry={tubeGeo}>
-        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1, roughness: 0.46 })} />
+        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1, roughness: 0.46, iridescent: true })} />
       </mesh>
       {spines.map((s) => {
         const pt = curve.getPointAt(s.t);
@@ -302,34 +375,49 @@ function SpineEel({ p, t, nSpine, mint }: { p: CnftArtPalette; t: CnftArtVisualT
 }
 
 function CoralHermit({ p, t }: { p: CnftArtPalette; t: CnftArtVisualTraits }) {
+  const shell = useRef<THREE.Group>(null);
+  const legs = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
+    if (shell.current) {
+      shell.current.rotation.z = Math.sin(cl * 0.45) * 0.06;
+    }
+    if (legs.current) {
+      legs.current.rotation.x = Math.sin(cl * 1.2) * 0.05 * t.finFlap;
+    }
+  });
   return (
     <group>
-      <mesh position={[0.15, 0, 0.05]} scale={[0.5, 0.7, 0.55]}>
-        <sphereGeometry args={[0.5, 24, 20]} />
-        <meshPhysicalMaterial
-          {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.85, metalness: 0.1, roughness: 0.5 })}
-        />
-      </mesh>
+      <group ref={shell} position={[0.15, 0, 0.05]} scale={[0.5, 0.7, 0.55]}>
+        <mesh>
+          <sphereGeometry args={[0.5, 24, 20]} />
+          <meshPhysicalMaterial
+            {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.85, metalness: 0.1, roughness: 0.5 })}
+          />
+        </mesh>
+      </group>
       <mesh position={[-0.1, 0, 0.12]}>
         <boxGeometry args={[0.2, 0.15, 0.18]} />
         <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L)} />
       </mesh>
-      {[
-        [0, -0.12, 0.25],
-        [-0.1, -0.12, 0.2],
-        [0.1, -0.12, 0.2],
-        [0, -0.12, 0.1],
-      ].map((pos, i) => (
-        <mesh
-          // eslint-disable-next-line react/no-array-index-key
-          key={i}
-          position={pos as [number, number, number]}
-          rotation={[0.4, 0, 0]}
-        >
-          <cylinderGeometry args={[0.04, 0.03, 0.2, 6]} />
-          <meshPhysicalMaterial color={p.shadow} metalness={0.15} roughness={0.55} />
-        </mesh>
-      ))}
+      <group ref={legs}>
+        {[
+          [0, -0.12, 0.25],
+          [-0.1, -0.12, 0.2],
+          [0.1, -0.12, 0.2],
+          [0, -0.12, 0.1],
+        ].map((pos, i) => (
+          <mesh
+            // eslint-disable-next-line react/no-array-index-key
+            key={i}
+            position={pos as [number, number, number]}
+            rotation={[0.4, 0, 0]}
+          >
+            <cylinderGeometry args={[0.04, 0.03, 0.2, 6]} />
+            <meshPhysicalMaterial color={p.shadow} metalness={0.15} roughness={0.55} />
+          </mesh>
+        ))}
+      </group>
       <mesh position={[-0.12, 0.15, 0.1]}>
         <cylinderGeometry args={[0.015, 0.015, 0.1, 5]} />
         <meshStandardMaterial color={p.shadow} />
@@ -360,6 +448,14 @@ function CoralHermit({ p, t }: { p: CnftArtPalette; t: CnftArtVisualTraits }) {
 }
 
 function PressureSnail({ p, t }: { p: CnftArtPalette; t: CnftArtVisualTraits }) {
+  const foot = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
+    if (foot.current) {
+      const s = 1 + Math.sin(cl * 0.85) * 0.04 * t.breathAmp * 12;
+      foot.current.scale.setScalar(s);
+    }
+  });
   return (
     <group>
       <mesh position={[0.1, 0, 0]} scale={[0.6, 0.55, 0.5]}>
@@ -368,24 +464,36 @@ function PressureSnail({ p, t }: { p: CnftArtPalette; t: CnftArtVisualTraits }) 
           {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.9, roughness: 0.5 })}
         />
       </mesh>
-      <mesh position={[-0.2, -0.15, 0.05]} scale={[0.5, 0.15, 0.4]}>
-        <sphereGeometry args={[0.5, 20, 12]} />
-        <meshPhysicalMaterial
-          {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.95, roughness: 0.42 })}
-        />
-      </mesh>
+      <group ref={foot} position={[-0.2, -0.15, 0.05]} scale={[0.5, 0.15, 0.4]}>
+        <mesh>
+          <sphereGeometry args={[0.5, 20, 12]} />
+          <meshPhysicalMaterial
+            {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 0.95, roughness: 0.42 })}
+          />
+        </mesh>
+      </group>
       <AnimeEyes p={p} L={t.L} x={-0.22} y={-0.02} z={0.1} r={0.03} sep={0.04} eyeScale={t.eyeScale} />
     </group>
   );
 }
 
 function EchoRay({ p, t, fs }: { p: CnftArtPalette; t: CnftArtVisualTraits; fs: number }) {
+  const disc = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
+    if (disc.current) {
+      const w = 1 + Math.sin(cl * 1.1) * 0.03 * t.finFlap;
+      disc.current.scale.set(w, fs * w, 0.2 + Math.sin(cl * 0.9) * 0.02);
+    }
+  });
   return (
     <group>
-      <mesh rotation={[0.05, 0, 0]} scale={[1, fs, 0.2]}>
-        <cylinderGeometry args={[0.75, 0.72, 0.1, 48]} />
-        <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1.1, metalness: 0.1 })} />
-      </mesh>
+      <group ref={disc} rotation={[0.05, 0, 0]} scale={[1, fs, 0.2]}>
+        <mesh>
+          <cylinderGeometry args={[0.75, 0.72, 0.1, 48]} />
+          <meshPhysicalMaterial {...animeSkinPhysicalProps(p, t.L, { emissiveBoost: 1.1, metalness: 0.1, iridescent: true })} />
+        </mesh>
+      </group>
       <mesh position={[-0.7, 0, 0]} rotation={[0, 0, 0.2]}>
         <boxGeometry args={[0.2, 0.08, 0.2]} />
         <meshPhysicalMaterial
@@ -407,20 +515,27 @@ function EchoRay({ p, t, fs }: { p: CnftArtPalette; t: CnftArtVisualTraits; fs: 
 
 export function CreatureByArchetype({ palette: p, traits: t, archetype, mint }: Props) {
   const g = useRef<THREE.Group>(null);
+  const biolumeLamp = useRef<THREE.PointLight>(null);
   const h = hash32(mint);
-  const wobble = 0.25 + (h % 100) / 250;
+  const wobble = 0.22 + (h % 100) / 280;
   const mantisSegs = 3 + (t.pressure % 3);
   const nSpine = 5 + (t.pressure % 4);
   const fs = t.moodT.finSpread;
   const baseScale = 0.52 + t.pressure * 0.04;
 
   useFrame((state) => {
-    const cl = state.clock.elapsedTime;
+    const cl = state.clock.elapsedTime * t.swimSpeed + t.idlePhase;
     if (!g.current) return;
     const dy = t.moodT.dy * 0.003;
-    g.current.position.y = dy + Math.sin(cl * wobble) * 0.1;
-    g.current.rotation.y = Math.sin(cl * 0.24) * 0.16 + t.moodT.rot * 0.004;
-    g.current.rotation.x = Math.sin(cl * 0.14) * 0.05;
+    g.current.position.y = dy + Math.sin(cl * wobble) * (0.09 + t.breathAmp * 2.2);
+    g.current.position.x = Math.sin(cl * 0.19) * 0.03 * t.bankAmp * 8;
+    g.current.rotation.y = Math.sin(cl * 0.24) * 0.16 + t.moodT.rot * 0.004 + Math.sin(cl * 0.11) * 0.04;
+    g.current.rotation.x = Math.sin(cl * 0.14) * 0.055;
+    g.current.rotation.z = Math.sin(cl * 0.17) * t.bankAmp + Math.sin(cl * 0.08) * 0.02;
+    const lamp = biolumeLamp.current;
+    if (lamp) {
+      lamp.intensity = 0.32 + t.L * 0.07 + Math.sin(cl * 1.85) * 0.08;
+    }
   });
 
   const vis = (() => {
@@ -449,6 +564,7 @@ export function CreatureByArchetype({ palette: p, traits: t, archetype, mint }: 
     <group ref={g} scale={baseScale * t.moodT.sc}>
       {vis}
       <pointLight
+        ref={biolumeLamp}
         position={[0, 0, 0.4]}
         color={new THREE.Color(p.biolume)}
         intensity={0.35 + t.L * 0.07}
